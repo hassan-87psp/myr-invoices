@@ -2738,6 +2738,7 @@ async function cloudLoad(u){if(!u){const {data}=await SB.auth.getUser();u=data.u
   ['customers','products','invoices','requests','imports','audit'].forEach(k=>{if(!Array.isArray(co[k]))co[k]=[]});co.lhdn=Object.assign({env:'sandbox',proxyUrl:'',health:'not_connected',lastOk:null,incidents:[]},co.lhdn||{});
   mergeOfficial(co,(docs.data||[]).filter(d=>d.company_id===r.id));const ls=(links.data||[]).filter(l=>l.company_id===r.id);mergeLinks(co,ls);LINKS[co.id]=new Set(ls.map(l=>l.token));
   PUSHED[co.id]=fnv(JSON.stringify(coBody(co)));return co});
+ try{const remembered=sessionStorage.getItem('myrinvoice.currentCompany');if(DB.companies.some(c=>c.id===remembered))DB.currentId=remembered}catch(e){}
  if(!DB.companies.some(c=>c.id===DB.currentId))DB.currentId=DB.companies[0]?.id||null}
 function mergeOfficial(co,docs){const by={};docs.forEach(d=>by[d.invoice_id]=d);
  co.invoices.forEach(inv=>{inv.lhdn=Object.assign({status:'Not Submitted',submissionUid:'',uuid:'',longId:'',validatedAt:'',errors:[],attempts:[]},inv.lhdn||{});const d=by[inv.id];
@@ -2756,12 +2757,13 @@ async function syncLinks(co){const want=[];
  const have=LINKS[co.id]||new Set();const keep=new Set(want.map(w=>w.token));const stale=[...have].filter(t=>!keep.has(t));
  if(stale.length)await SB.from('public_links').delete().in('token',stale);LINKS[co.id]=keep}
 let PUSHING=false;
-async function cloudPush(){PUSH_T=null;if(!SB||!DB.session)return;if(PUSHING){clearTimeout(PUSH_T);PUSH_T=setTimeout(cloudPush,500);return}PUSHING=true;
+async function cloudPush(){PUSH_T=null;if(!SB||!DB.session)return true;if(PUSHING){clearTimeout(PUSH_T);PUSH_T=setTimeout(cloudPush,500);return false}PUSHING=true;
  try{for(const co of DB.companies){if(!co._v||co.status==='suspended')continue;const body=coBody(co);const h=fnv(JSON.stringify(body));if(PUSHED[co.id]===h)continue;
   const {data,error}=await SB.from('companies').update({data:body,name:co.name,tin:(co.tin||'').toUpperCase(),version:co._v+1}).eq('id',co.id).eq('version',co._v).select('version');
-  if(error){toast('Cloud save failed: '+error.message,'err');continue}
-  if(!data||!data.length){toast(can('Edit Draft')?'This company was changed elsewhere — latest data reloaded.':'Your role is read-only — changes were not saved.','warn');await cloudLoad();route();return}
-  co._v=data[0].version;PUSHED[co.id]=h;await syncLinks(co)}}
+  if(error){toast('Cloud save failed: '+error.message+' — changes kept on this page.','err');return false}
+  if(!data||!data.length){toast('Cloud save conflict. Your unsaved changes remain on this page. Export a backup from Settings before reloading.','err');return false}
+  co._v=data[0].version;PUSHED[co.id]=h;await syncLinks(co)}return true}
+ catch(e){console.error('MYR Invoice cloud save',e);toast('Cloud save failed: '+(e.message||String(e)),'err');return false}
  finally{PUSHING=false}}
 async function cloudCreate(co){const body=coBody(co);const {data:created,error}=await SB.from('companies').insert({id:co.id,name:co.name,tin:(co.tin||'').toUpperCase(),plan:'Starter',data:body}).select('plan,status,version').single();if(error){toast('Could not create company: '+error.message,'err');return false}co.plan=created.plan;co._v=created.version;co.status=created.status;PUSHED[co.id]=fnv(JSON.stringify(body));LINKS[co.id]=new Set();await syncLinks(co);return true}
 function newPwModal(){modal('Set a new password',field('np-pw','New password (min 8 characters)','','password','autocomplete="new-password"'),`<button class="btn p" onclick="(async()=>{const pw=$('#np-pw').value;if(pw.length<8)return toast('Minimum 8 characters.','err');const {error}=await SB.auth.updateUser({password:pw});if(error)return toast(error.message,'err');closeModal();toast('Password updated')})()">Update password</button>`)}
@@ -2779,7 +2781,7 @@ const empty=(icon,title,msg,action='')=>`<div class="empty"><div class="ico">${i
 function go(h){if(location.hash===h)route();else location.hash=h}
 const rerender=()=>route();
 function toggleSide(){$('#side')?.classList.toggle('open')}
-function switchCo(id){DB.currentId=id;save();route()}
+function switchCo(id){DB.currentId=id;try{sessionStorage.setItem('myrinvoice.currentCompany',id)}catch(e){}save();route()}
 function scrollToId(id){document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'})}
 
 /* ================= Router ================= */
@@ -2837,7 +2839,7 @@ async function doSignup(){const name=val('su-name'),email=val('su-email').toLowe
  if(DB.users.some(u=>u.email===email))return authErr('An account with this email already exists.');DB.users.push({email,name,pw:await pwHash(email+':'+pw),at:new Date().toISOString()});DB.session=email;
  DB.companies.forEach(c=>c.members.forEach(m=>{if(m.email===email&&m.status==='invited'){m.status='active';m.name=name}}));save();go(myCos().length?'#/app/dashboard':'#/app/onboarding')}
 async function doLogin(){const email=val('li-email').toLowerCase(),pw=$('#li-pw').value;if(CLOUD){const btn=$('.auth-box .btn.p');btn.disabled=true;const {data,error}=await SB.auth.signInWithPassword({email,password:pw});if(error){btn.disabled=false;return authErr(error.message==='Invalid login credentials'?'Incorrect email or password.':error.message)}try{await cloudLoad(data.user)}catch(e){btn.disabled=false;return authErr('Could not load your data: '+e.message)}return go(myCos().length?'#/app/dashboard':'#/app/onboarding')}const u=DB.users.find(x=>x.email===email);if(!u||u.pw!==await pwHash(email+':'+pw))return authErr('Incorrect email or password.');DB.session=email;save();go('#/app/dashboard')}
-async function logout(){if(CLOUD){clearTimeout(PUSH_T);await cloudPush();await SB.auth.signOut();DB={users:[],session:null,companies:[],currentId:null};PROFILE=null;return go('#/')}DB.session=null;save();go('#/')}
+async function logout(){if(CLOUD){clearTimeout(PUSH_T);const saved=await cloudPush();if(saved===false)return toast('There are unsaved changes. Please retry or export a backup before logging out.','err');await SB.auth.signOut();DB={users:[],session:null,companies:[],currentId:null};PROFILE=null;return go('#/')}DB.session=null;save();go('#/')}
 function vOnboarding(){document.title='Set up company — MYR Invoice';const first=!myCos().length;
  return `<div class="mobile-page"><div class="box" style="max-width:720px"><div class="row sb mb"><a href="#/" class="row nw" style="gap:10px">${LOGO(30)}<b style="color:var(--navy)">MYR Invoice</b></a>${first?`<button class="btn g sm" onclick="logout()">Log out</button>`:`<a class="btn g sm" href="#/app/team/accountant">Cancel</a>`}</div>
  <div class="card pad"><h1 style="font-size:24px">${first?'Set up your company':'Add a client company'}</h1><p class="muted mt8 mb">These details appear on every e-Invoice as the supplier. You can change them later in Settings.</p><div id="ob-err"></div>
