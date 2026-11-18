@@ -2468,6 +2468,11 @@ footer.ft{background:var(--navy);color:#B7C3D6;padding:56px 0 28px;margin-top:84
 .upload{border:2px dashed #CBD5E1;border-radius:16px;padding:36px;text-align:center;background:#FCFDFF;cursor:pointer;transition:.15s}.upload:hover{border-color:var(--blue);background:var(--b50)}
 .qrwrap svg{width:220px;height:220px}
 .chart-bar{transition:opacity .15s}.chart-bar:hover{opacity:.8}
+
+/* Responsive safeguard: tables scroll inside cards rather than stretching dashboard grids. */
+.grid > *, .card { min-width: 0; }
+.tw { max-width: 100%; }
+.toast { overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
