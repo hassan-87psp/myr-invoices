@@ -44,3 +44,16 @@ Date: 18 November 2026
 ## Operational notes
 - Public repository means HTML, frontend JS and SQL/backend function *source* are visible. Only server-held credentials are secret.
 - Existing PipSePaisa repository and Supabase project were left unchanged.
+
+## 18 November 2026 — Super Admin / Demo Lab follow-up
+- Enabled platform admin access for the existing authorized owner account. The app's standard company owner role remains intact.
+- Rechecked Super Admin routes: Overview, Businesses, Subscriptions, LHDN API Monitor, Users, Security & Audit; added Demo Lab as an additional tab.
+- Added admin-only fictional demo workspace creation/reopening with existing sample customers, products, seven invoices and payment examples. It is not provisioned automatically: the admin clicks Create fictional demo workspace.
+- Added prominent DEMO LAB banner, disabled browser-level LHDN submission, connection configuration/health tests and public link synchronization for demo tenants.
+- Deployed LHDN Supabase Edge Function version 2. It rejects all live LHDN API operations for a company whose stored data has demo=true, independently of frontend restrictions.
+- Added sample accepted/rejected LHDN response previews to Demo Lab. These are visual mock responses only; no real records get an official Valid/Invalid status.
+- Updated admin_companies SQL function to exclude fictional demo tenants from platform business and list-price recurring-revenue aggregates. Included corresponding SQL migration in repository.
+- Hardened Super Admin data loader: errors from all four data sources are now surfaced rather than silently ignored.
+- Database role tests: authorized platform admin can read company/user/monitor aggregates; synthetic unauthorised account is rejected; transaction-scoped demo insert is excluded from admin aggregate and rolled back.
+- Inline JavaScript parsed without syntax errors after edits. GitHub commits made to main; independent external HTTP check of the GitHub Pages release was not possible from this environment.
+- Still pending: real browser click-through, full demo invoice edit/print/payment end-to-end, SMTP delivery for business notifications, actual authorized LHDN sandbox transaction, payment gateway and independent production security review.
