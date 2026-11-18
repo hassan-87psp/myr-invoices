@@ -179,8 +179,10 @@ Deno.serve(async (req) => {
       return json(errBody("Production submission is not enabled on this server yet."), 403);
     }
 
-    const { data: co } = await admin.from("companies").select("id,tin,status").eq("id", companyId).maybeSingle();
+    const { data: co } = await admin.from("companies").select("id,tin,status,data").eq("id", companyId).maybeSingle();
     if (!co) return json(errBody("Company not found."), 404);
+    // Fictional demo tenants must never send real MyInvois requests, even if a client bypasses the UI.
+    if (co.data?.demo === true) return json(errBody("Demo workspace: live LHDN API requests are disabled. No real documents are submitted."), 403);
     if (co.status !== "active") return json(errBody("This company account is suspended."), 403);
     const { data: mem } = await admin.from("company_members").select("role,status")
       .eq("company_id", companyId).eq("email", user.email.toLowerCase()).eq("status", "active").maybeSingle();
