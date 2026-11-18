@@ -10,7 +10,7 @@
 // =====================================================================
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const ORIGIN = Deno.env.get("ALLOWED_ORIGIN") ?? "*";
+const ORIGIN = Deno.env.get("ALLOWED_ORIGIN") ?? "https://hassan-87psp.github.io";
 const CORS: Record<string, string> = {
   "Access-Control-Allow-Origin": ORIGIN,
   "Access-Control-Allow-Headers":
