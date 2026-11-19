@@ -6,6 +6,7 @@ on:
     paths:
       - "index.html"
       - "config.js"
+      - "tests/**"
       - ".github/workflows/pages.yml"
   pull_request:
     branches: [main]
@@ -38,3 +39,5 @@ jobs:
           if (/sb_secret_[a-z0-9_-]+/i.test(config)) throw new Error('Secret key is embedded in the browser config');
           console.log('Validated ' + scripts.length + ' inline scripts and config.js');
           NODE
+      - name: Run financial regression tests
+        run: node tests/financial.test.cjs
