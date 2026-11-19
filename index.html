@@ -2484,7 +2484,7 @@ footer.ft{background:var(--navy);color:#B7C3D6;padding:56px 0 28px;margin-top:84
 <script>
 'use strict';
 /* ================= Config ================= */
-const CFG=Object.assign({supabaseUrl:'',supabaseAnonKey:'',lhdnFunctionUrl:'',adminEmails:[],allowDemo:null,supportEmail:'support@myrinvoice.com'},window.MYR_CONFIG||{});
+const CFG=Object.assign({supabaseUrl:'',supabaseAnonKey:'',lhdnFunctionUrl:'',adminEmails:[],allowDemo:null,atomicRecordWrites:false,supportEmail:'support@myrinvoice.com'},window.MYR_CONFIG||{});
 const CLOUD=!!(CFG.supabaseUrl&&CFG.supabaseAnonKey);
 if(CFG.allowDemo===null)CFG.allowDemo=!CLOUD;
 /* ================= Utilities ================= */
@@ -2736,6 +2736,35 @@ async function cloudInit(publicOnly){if(!SB){if(!window.supabase)await loadScrip
   SB.auth.onAuthStateChange((ev)=>{if(ev==='PASSWORD_RECOVERY')setTimeout(newPwModal,300);if(ev==='SIGNED_OUT'){DB={users:[],session:null,companies:[],currentId:DB.currentId};PROFILE=null}})}
  if(publicOnly)return;const {data}=await SB.auth.getSession();if(data.session)await cloudLoad(data.session.user)}
 const coBody=co=>{const b=clone(co);delete b._v;delete b.members;delete b.status;return b};
+
+const atomicEnabled=()=>CLOUD&&CFG.atomicRecordWrites===true;
+async function atomicReady(co){
+ if(!atomicEnabled())return true;
+ clearTimeout(PUSH_T);PUSH_T=null;
+ if(PUSHING){toast('Cloud is saving. Please retry when previous save finishes.','warn');return false}
+ if(UNSYNCED_CLOUD||PUSHED[co.id]!==fnv(JSON.stringify(coBody(co)))){
+  if(!(await cloudPush())){toast('Complete pending cloud sync before saving this record.','err');return false}
+ }
+ return true;
+}
+function atomicApply(co,result,before){
+ if(!result||!result.company_data||!Number.isInteger(Number(result.version)))return false;
+ const server=clone(result.company_data);
+ const after=coBody(co);
+ const merged=window.MYR_CONCURRENCY?.mergeCompany(before||after,after,server);
+ if(!merged?.ok){
+  toast('Record saved on server but local changes conflict. Keep this page open and refresh only after exporting your work.','err');
+  return false;
+ }
+ const members=co.members, status=co.status, plan=co.plan;
+ Object.assign(co,merged.data);
+ co.members=members;co.status=status;co.plan=plan;co._v=Number(result.version);
+ BASELINES[co.id]=clone(server);
+ PUSHED[co.id]=fnv(JSON.stringify(server));
+ UNSYNCED_CLOUD=DB.companies.some(c=>c._v&&PUSHED[c.id]!==fnv(JSON.stringify(coBody(c))));
+ if(UNSYNCED_CLOUD)save();
+ return true;
+}
 async function cloudLoad(u){if(!u){const {data}=await SB.auth.getUser();u=data.user}if(!u)return;const email=(u.email||'').toLowerCase();
  await SB.rpc('accept_invites');
  const {data:prof}=await SB.from('profiles').select('*').eq('id',u.id).maybeSingle();PROFILE=prof||{};
@@ -3015,8 +3044,8 @@ function newDocModal(){modal('Create document',`<div class="grid g2">${[['02','C
 /* ================= Invoice builder ================= */
 let ED=null,PREFILL=null;
 function vBuilder(id){const co=CO();if(!can('Edit Draft')&&!can('Create')){toast('Your role cannot edit documents.','err');return ph('Not allowed','')}
- if(id){const src=co.invoices.find(i=>i.id===id);if(!src)return ph('Document not found','',``,['#/app/invoices','Sales & Invoices']);if(locked(src)){setTimeout(()=>go('#/app/invoices/view/'+id));return null}ED=clone(src);ED._checked=src.lhdn.status==='Invalid'||src.appStatus!=='Draft'}
- else{ED=PREFILL||blankInvoice(co);PREFILL=null;ED._autoNumber=ED.number===co.prefix+co.nextNo?ED.number:null;if(!ED.customerId&&ED.consolidated)ED.customerId=co.customers.find(c=>c.tin===GP)?.id||''}
+ if(id){const src=co.invoices.find(i=>i.id===id);if(!src)return ph('Document not found','',``,['#/app/invoices','Sales & Invoices']);if(locked(src)){setTimeout(()=>go('#/app/invoices/view/'+id));return null}ED=clone(src);ED._expected=clone(src);ED._checked=src.lhdn.status==='Invalid'||src.appStatus!=='Draft'}
+ else{ED=PREFILL||blankInvoice(co);PREFILL=null;delete ED._expected;ED._autoNumber=ED.number===co.prefix+co.nextNo?ED.number:null;if(!ED.customerId&&ED.consolidated)ED.customerId=co.customers.find(c=>c.tin===GP)?.id||''}
  AFTER=()=>{bTotals();if(ED._checked)bCheck()};return `<div id="bwrap">${builderInner()}</div>`}
 function builderInner(){const co=CO();const e=ED;const isNew=!co.invoices.some(i=>i.id===e.id);const sb=isSelfBilled(e);const cust=custOf(co,e);const custs=co.customers.filter(c=>!c.archived);
  const refs=co.invoices.filter(i=>i.id!==e.id&&['01','11'].includes(i.docType));
@@ -3090,6 +3119,7 @@ async function bSave(status){
   if(idx>=0&&locked(co.invoices[idx]))
    return toast('LHDN-submitted or cancelled documents cannot be edited.','err');
 
+  if(atomicEnabled()&&!(await atomicReady(co)))return;
   let reserved=false;
   // A preview number is NOT assigned until this new invoice is actually saved.
   // The authenticated server RPC locks the tenant row, checks reservations and
@@ -3116,12 +3146,29 @@ async function bSave(status){
   if(co.invoices.some(o=>o.id!==ED.id&&o.number.toLowerCase()===ED.number.toLowerCase()))
    return toast('Invoice number changed during save and is already used. Try again.','err');
   const rec=clone(ED);
-  delete rec._checked;delete rec._autoNumber;
+  delete rec._checked;delete rec._autoNumber;delete rec._expected;
   if(idx>=0&&paidOf(co.invoices[idx])>calc(rec).total)
    return toast('Invoice total cannot be reduced below recorded payments. Adjust the payment first.','err');
   if(status==='Ready')
    rec.appStatus=co.approvalRequired&&!can('Approve')?'Approval Pending':'Ready';
   else if(idx<0||rec.appStatus==='Draft')rec.appStatus='Draft';
+  if(atomicEnabled()){
+   tl(rec,status?'Saved — status '+rec.appStatus:'Draft saved');
+   const expected=idx>=0?(ED._expected||null):null;
+   if(idx>=0&&!expected)return toast('Invoice edit has no revision snapshot. Reopen the invoice and retry.','err');
+   const before=coBody(co);
+   const {data,error}=await SB.rpc('atomic_save_record',{
+    p_company_id:co.id,p_kind:'invoices',p_record:rec,p_expected:expected
+   });
+   if(error||!data){
+    toast('Invoice record not saved: '+(error?.message||'Unknown error')+'. Reopen the document before retrying.','err');
+    return;
+   }
+   if(!atomicApply(co,data,before))return;
+   toast(status?(rec.appStatus==='Approval Pending'?'Sent for approval':'Saved and marked ready'):'Draft saved');
+   go('#/app/invoices/view/'+rec.id);
+   return;
+  }
   if(idx<0){
    if(!reserved&&rec.number===co.prefix+co.nextNo)co.nextNo++;
    tl(rec,'Created');co.invoices.unshift(rec);
