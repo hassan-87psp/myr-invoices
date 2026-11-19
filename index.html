@@ -3323,18 +3323,68 @@ function custTable(co){const q=CQ.q.toLowerCase();const l=co.customers.filter(c=
  return `<div class="tw"><table class="t"><thead><tr><th>Customer</th><th>TIN</th><th>ID</th><th>Contact</th><th class="r">Outstanding</th><th>e-Invoice details</th><th></th></tr></thead><tbody>${l.map(c=>{const e=custErrors(c);const out=co.invoices.filter(i=>i.customerId===c.id&&isSale(i)).reduce((a,i)=>a+balance(i),0);return `<tr><td><b>${esc(c.name)}</b>${c.system?' <span class="badge">System</span>':''}<div class="muted sm">${esc(c.addr?.city||'')}</div></td><td class="mono">${esc(c.tin||'—')}</td><td class="sm">${esc(c.idType||'')} ${esc(c.idValue||'—')}</td><td class="sm">${esc(c.email||'')}<div class="muted">${esc(c.phone||'')}</div></td><td class="r num">${out?money(out):'—'}</td><td>${e.length?`<span class="badge b-warn" title="${esc(e.map(x=>x.problem).join('; '))}">${e.length} missing</span>`:B('Ready2')}</td><td class="r nowrap"><button class="btn sm" onclick="custModal('${c.id}')">Edit</button>${c.system?'':`<button class="btn sm g" onclick="archiveCust('${c.id}')">${c.archived?'Restore':'Archive'}</button>`}</td></tr>`}).join('')}</tbody></table></div>`}
 function drawCust(){$('#custt').innerHTML=custTable(CO());$$('.pills button').forEach(b=>b.classList.toggle('on',b.getAttribute('onclick').includes(`'${CQ.f}'`)))}
 let CM_FROM_BUILDER=false;
+let CM_EXPECTED=null;
 function custModal(id,fromBuilder){CM_FROM_BUILDER=!!fromBuilder;const co=CO();const c=id?co.customers.find(x=>x.id===id):{name:'',tin:'',idType:'BRN',idValue:'',sst:'NA',email:'',phone:'',addr:{line:'',city:'',postcode:'',state:'14',country:'MYS'},creditDays:30};
+ CM_EXPECTED=id?clone(c):null;
  modal(id?'Edit customer':'Add customer',`<div id="cm-err"></div><div class="grid g2"><div class="spanall">${field('cm-name','Registered name *',c.name)}</div><div class="fg"><label class="f">TIN *</label><div class="row nw"><input id="cm-tin" value="${esc(c.tin)}" style="text-transform:uppercase" placeholder="C… / IG… / EI…"><button class="btn" type="button" onclick="verifyTinUI()" title="Validate with LHDN">Verify</button></div><div class="hint" id="cm-tinr">Use EI00000000010 for general public, EI00000000020 for foreign buyers.</div></div>
  <div class="fg"><label class="f">ID type</label><select id="cm-idt">${opt([['BRN','BRN (business registration)'],['NRIC','NRIC (MyKad)'],['PASSPORT','Passport'],['ARMY','Army ID']],c.idType)}</select></div>${field('cm-idv','ID number *',c.idValue)}${field('cm-sst','SST no. (or NA)',c.sst||'NA')}${field('cm-email','Email',c.email,'email')}${field('cm-phone','Phone *',c.phone,'tel','placeholder="+60…"')}<div class="spanall">${field('cm-line','Address line *',c.addr?.line)}</div>${field('cm-city','City *',c.addr?.city)}${field('cm-post','Postcode',c.addr?.postcode)}<div class="fg"><label class="f">State *</label><select id="cm-state">${opt(STATES,c.addr?.state||'14')}</select></div>${field('cm-country','Country (ISO-3)',c.addr?.country||'MYS','text','maxlength="3" style="text-transform:uppercase"')}${field('cm-cd','Credit days',c.creditDays??30,'number','min="0"')}</div>`,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn p" onclick="saveCust('${id||''}')">Save customer</button>`,true)}
 function readCustForm(){return {name:val('cm-name'),tin:val('cm-tin').toUpperCase(),idType:val('cm-idt'),idValue:val('cm-idv'),sst:val('cm-sst')||'NA',email:val('cm-email'),phone:val('cm-phone'),addr:{line:val('cm-line'),city:val('cm-city'),postcode:val('cm-post'),state:val('cm-state'),country:(val('cm-country')||'MYS').toUpperCase()},creditDays:+val('cm-cd')||0}}
-function saveCust(id){const co=CO();const d=readCustForm();if(!d.name)return $('#cm-err').innerHTML='<div class="note e mb">Name is required.</div>';
- const dup=co.customers.find(c=>c.id!==id&&!c.system&&((d.tin&&c.tin===d.tin&&c.idValue===d.idValue&&!SPECIAL_TIN[d.tin])||c.name.toLowerCase()===d.name.toLowerCase()));if(dup&&!$('#cm-err').dataset.ok){$('#cm-err').dataset.ok='1';$('#cm-err').innerHTML=`<div class="note w mb">Possible duplicate of <b>${esc(dup.name)}</b>. Click Save again to keep both.</div>`;return}
- let c;if(id){c=co.customers.find(x=>x.id===id);Object.assign(c,d);audit(co,'customer.update',c.name)}else{c={id:uuid(),...d,archived:false,createdAt:new Date().toISOString()};co.customers.push(c);audit(co,'customer.create',c.name)}
- const e=custErrors(c);save();closeModal();toast(e.length?'Saved — '+e.length+' e-Invoice detail(s) still missing':'Customer saved',e.length?'warn':'ok');
- if(CM_FROM_BUILDER&&ED){ED.customerId=c.id;bRefresh()}else if(location.hash.includes('/customers'))drawCust();}
+async function saveCust(id){
+ const co=CO(),d=readCustForm();
+ if(!d.name)return $('#cm-err').innerHTML='<div class="note e mb">Name is required.</div>';
+ const dup=co.customers.find(c=>c.id!==id&&!c.system&&
+  ((d.tin&&c.tin===d.tin&&c.idValue===d.idValue&&!SPECIAL_TIN[d.tin])||
+   c.name.toLowerCase()===d.name.toLowerCase()));
+ if(dup&&!$('#cm-err').dataset.ok){
+  $('#cm-err').dataset.ok='1';
+  $('#cm-err').innerHTML='<div class="note w mb">Possible duplicate of <b>'+esc(dup.name)+'</b>. Click Save again to keep both.</div>';
+  return;
+ }
+ const original=id?co.customers.find(x=>x.id===id):null;
+ if(id&&!original)return toast('Customer not found.','err');
+ const customer=id?Object.assign(clone(original),d):
+  {id:uuid(),...d,archived:false,createdAt:new Date().toISOString()};
+ if(atomicEnabled()){
+  if(!(await atomicReady(co)))return;
+  const before=coBody(co);
+  const {data,error}=await SB.rpc('atomic_save_record',{
+   p_company_id:co.id,p_kind:'customers',p_record:customer,
+   p_expected:id?CM_EXPECTED:null
+  });
+  if(error||!data)return toast('Customer not saved: '+(error?.message||'Unknown server error'),'err');
+  if(!atomicApply(co,data,before))return;
+ }else{
+  if(id){Object.assign(original,d);audit(co,'customer.update',original.name)}
+  else{co.customers.push(customer);audit(co,'customer.create',customer.name)}
+  save();
+ }
+ const e=custErrors(customer);CM_EXPECTED=null;
+ closeModal();
+ toast(e.length?'Saved — '+e.length+' e-Invoice detail(s) still missing':'Customer saved',e.length?'warn':'ok');
+ if(CM_FROM_BUILDER&&ED){ED.customerId=customer.id;bRefresh()}
+ else if(location.hash.includes('/customers'))drawCust();
+}
 async function verifyTinUI(){const co=CO();const tin=val('cm-tin').toUpperCase(),t=val('cm-idt'),v=val('cm-idv');const o=$('#cm-tinr');if(!tin||!v){o.innerHTML='<span style="color:var(--err)">Enter TIN and ID number first.</span>';return}if(!LHDN.base(co)){o.innerHTML='<span style="color:var(--warn)">LHDN backend not connected — format check only: '+(TIN_RE.test(tin)?'format OK':'format looks wrong')+'.</span>';return}
  o.textContent='Checking with LHDN…';try{await LHDN.call(co,'GET',`/api/v1.0/taxpayer/validate/${encodeURIComponent(tin)}?idType=${encodeURIComponent(t)}&idValue=${encodeURIComponent(v)}`);o.innerHTML='<span style="color:var(--ok)">✓ TIN and ID matched by LHDN.</span>'}catch(e){o.innerHTML=`<span style="color:var(--err)">${e.status===404||e.status===400?'Not matched by LHDN — check TIN and ID.':esc(e.message)}</span>`}}
-function archiveCust(id){const co=CO();const c=co.customers.find(x=>x.id===id);c.archived=!c.archived;audit(co,c.archived?'customer.archive':'customer.restore',c.name);save();drawCust()}
+async function archiveCust(id){
+ const co=CO(),c=co.customers.find(x=>x.id===id);
+ if(!c)return toast('Customer not found.','err');
+ if(!can('Edit Draft'))return toast('Not allowed to edit customers.','err');
+ if(atomicEnabled()){
+  if(!(await atomicReady(co)))return;
+  const before=coBody(co),updated={...clone(c),archived:!c.archived};
+  const {data,error}=await SB.rpc('atomic_save_record',{
+   p_company_id:co.id,p_kind:'customers',p_record:updated,p_expected:clone(c)
+  });
+  if(error||!data)return toast('Customer status not saved: '+(error?.message||'Unknown error'),'err');
+  if(!atomicApply(co,data,before))return;
+ }else{
+  c.archived=!c.archived;
+  audit(co,c.archived?'customer.archive':'customer.restore',c.name);
+  save();
+ }
+ drawCust();
+}
 function exportCust(){if(!can('Export'))return toast('Your role cannot export.','err');const co=CO();download('customers-'+todayStr()+'.csv','﻿'+toCSV([['Name','TIN','ID type','ID number','SST','Email','Phone','Address','City','Postcode','State','Country','Missing details'],...co.customers.filter(c=>!c.system).map(c=>[c.name,c.tin,c.idType,c.idValue,c.sst,c.email,c.phone,c.addr?.line,c.addr?.city,c.addr?.postcode,c.addr?.state,c.addr?.country,custErrors(c).map(e=>e.problem).join('; ')])]))}
 function reqUrl(r){return location.origin+location.pathname+'#/r/'+r.token}
 function reqStatus(r){return r.status==='Open'&&r.expiresAt<todayStr()?'Expired':r.status}
