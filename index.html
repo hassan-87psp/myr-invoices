@@ -2813,8 +2813,19 @@ async function cloudPush(){
      toast('Concurrent edit conflict: '+(merged?.conflicts||['Please reload after exporting a backup']).slice(0,3).join(', ')+'. Your local changes were NOT overwritten.','err');
      return false;
     }
+    // Do not overwrite user edits made while the async conflict check ran.
+    if(fnv(JSON.stringify(coBody(co)))!==h){
+     toast('More edits occurred during synchronization. Changes kept locally; retry save.','warn');
+     return false;
+    }
+    const priorNumbers=new Map((body.invoices||[]).map(i=>[i.id,i.number]));
     Object.assign(co,merged.data);
     co.status=latest.status;co.plan=latest.plan;co._v=latest.version;
+    for(const inv of co.invoices||[]){
+     const oldNumber=priorNumbers.get(inv.id);
+     if(oldNumber&&oldNumber!==inv.number)
+      audit(co,'invoice.renumber',oldNumber+' -> '+inv.number+' (concurrent numbering)');
+    }
     BASELINES[co.id]=clone(latest.data||{});
     PUSHED[co.id]=fnv(JSON.stringify(latest.data||{}));
     if(retry===2){
