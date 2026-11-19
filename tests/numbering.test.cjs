@@ -13,7 +13,7 @@ function setup(rpcResult){
  let saves=0,remote=0,goTo='',calls=0;
  const toasts=[];
  const context=vm.createContext({
-  ED:invoice,CO:()=>co,CLOUD:true,UNSYNCED_CLOUD:false,INVOICE_SAVING:false,
+  ED:invoice,CO:()=>co,CLOUD:true,UNSYNCED_CLOUD:false,INVOICE_SAVING:false, atomicEnabled:()=>false,
   can:()=>true,
   bCheck:()=>({errors:[]}),
   clone:x=>JSON.parse(JSON.stringify(x)),
