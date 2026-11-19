@@ -2311,6 +2311,7 @@ var qrcode = function() {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 <script src="config.js"></script>
+<script src="concurrency.js"></script>
 <style>
 :root{--white:#fff;--off:#F7F9FC;--navy:#0B1F3A;--navy2:#132B4D;--blue:#2563EB;--blue2:#1D4ED8;--b50:#EFF4FF;--ink:#0F172A;--ink2:#334155;--muted:#64748B;--line:#E5EAF2;--ok:#047857;--ok50:#ECFDF5;--warn:#B45309;--warn50:#FFFBEB;--err:#DC2626;--err50:#FEF2F2;--r:16px;--sh:0 1px 2px rgba(11,31,58,.04),0 6px 20px rgba(11,31,58,.06)}
 *{box-sizing:border-box}
@@ -2729,7 +2730,7 @@ async function fetchDetails(co,inv){try{const d=await LHDN.call(co,'GET','/api/v
  if(inv.lhdn.status==='Invalid'){const steps=d?.validationResults?.validationSteps||[];inv.lhdn.errors=steps.filter(s=>s.status==='Invalid').flatMap(s=>flattenErr(s.error,s.name));inv.appStatus='Ready'}}catch(e){}}
 
 /* ================= Cloud (Supabase) data layer ================= */
-let SB=null,PROFILE=null;const PUSHED={},LINKS={},LINKH={};
+let SB=null,PROFILE=null;const PUSHED={},BASELINES={},LINKS={},LINKH={};
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Could not load '+src));document.head.appendChild(s)})}
 async function cloudInit(publicOnly){if(!SB){if(!window.supabase)await loadScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js');SB=window.supabase.createClient(CFG.supabaseUrl,CFG.supabaseAnonKey);
   SB.auth.onAuthStateChange((ev)=>{if(ev==='PASSWORD_RECOVERY')setTimeout(newPwModal,300);if(ev==='SIGNED_OUT'){DB={users:[],session:null,companies:[],currentId:DB.currentId};PROFILE=null}})}
@@ -2747,7 +2748,7 @@ async function cloudLoad(u){if(!u){const {data}=await SB.auth.getUser();u=data.u
   co.members=(mem.data||[]).filter(m=>m.company_id===r.id&&m.status!=='removed').map(m=>({email:m.email,name:m.name||'',role:m.role,status:m.status,at:m.created_at}));
   ['customers','products','invoices','requests','imports','audit'].forEach(k=>{if(!Array.isArray(co[k]))co[k]=[]});co.lhdn=Object.assign({env:'sandbox',proxyUrl:'',health:'not_connected',lastOk:null,incidents:[]},co.lhdn||{});
   mergeOfficial(co,(docs.data||[]).filter(d=>d.company_id===r.id));const ls=(links.data||[]).filter(l=>l.company_id===r.id);mergeLinks(co,ls);LINKS[co.id]=new Set(ls.map(l=>l.token));
-  PUSHED[co.id]=fnv(JSON.stringify(coBody(co)));return co});
+  const baseline=coBody(co);BASELINES[co.id]=clone(baseline);PUSHED[co.id]=fnv(JSON.stringify(baseline));return co});
  try{const remembered=sessionStorage.getItem('myrinvoice.currentCompany');if(DB.companies.some(c=>c.id===remembered))DB.currentId=remembered}catch(e){}
  if(!DB.companies.some(c=>c.id===DB.currentId))DB.currentId=DB.companies[0]?.id||null}
 function mergeOfficial(co,docs){const by={};docs.forEach(d=>by[d.invoice_id]=d);
@@ -2767,15 +2768,70 @@ async function syncLinks(co){if(co.demo){LINKS[co.id]=new Set();return}const wan
  const have=LINKS[co.id]||new Set();const keep=new Set(want.map(w=>w.token));const stale=[...have].filter(t=>!keep.has(t));
  if(stale.length)await SB.from('public_links').delete().in('token',stale);LINKS[co.id]=keep}
 let PUSHING=false;
-async function cloudPush(){PUSH_T=null;if(!SB||!DB.session)return true;if(PUSHING){clearTimeout(PUSH_T);PUSH_T=setTimeout(cloudPush,500);return false}PUSHING=true;
- try{for(const co of DB.companies){if(!co._v)continue;const body=coBody(co);if(co.status==='suspended'){if(PUSHED[co.id]!==fnv(JSON.stringify(body))){toast('Suspended company data cannot be saved. Revert changes or contact support.','err');return false}continue}const h=fnv(JSON.stringify(body));if(PUSHED[co.id]===h)continue;
-  const {data,error}=await SB.from('companies').update({data:body,name:co.name,tin:(co.tin||'').toUpperCase(),version:co._v+1}).eq('id',co.id).eq('version',co._v).select('version');
-  if(error){toast('Cloud save failed: '+error.message+' — changes kept on this page.','err');return false}
-  if(!data||!data.length){toast('Cloud save conflict. Your unsaved changes remain on this page. Export a backup from Settings before reloading.','err');return false}
-  co._v=data[0].version;PUSHED[co.id]=h;await syncLinks(co)}UNSYNCED_CLOUD=DB.companies.some(c=>c._v&&PUSHED[c.id]!==fnv(JSON.stringify(coBody(c))));if(UNSYNCED_CLOUD){clearTimeout(PUSH_T);PUSH_T=setTimeout(cloudPush,700)}return !UNSYNCED_CLOUD}
- catch(e){console.error('MYR Invoice cloud save',e);toast('Cloud save failed: '+(e.message||String(e)),'err');return false}
- finally{PUSHING=false}}
-async function cloudCreate(co){const body=coBody(co);const {error}=await SB.from('companies').insert({id:co.id,name:co.name,tin:(co.tin||'').toUpperCase(),plan:'Starter',data:body});if(error){toast('Could not create company: '+error.message,'err');return false}/* INSERT without RETURNING: owner membership is added by the AFTER INSERT trigger. The new row is not SELECT-visible until that trigger has run. */co.plan='Starter';co._v=1;co.status='active';PUSHED[co.id]=fnv(JSON.stringify(body));LINKS[co.id]=new Set();await syncLinks(co);return true}
+async function cloudPush(){
+ PUSH_T=null;
+ if(!SB||!DB.session)return true;
+ if(PUSHING){clearTimeout(PUSH_T);PUSH_T=setTimeout(cloudPush,500);return false}
+ PUSHING=true;
+ try{
+  for(const co of DB.companies){
+   if(!co._v)continue;
+   if(co.status==='suspended'){
+    if(PUSHED[co.id]!==fnv(JSON.stringify(coBody(co)))){
+     toast('Suspended company data cannot be saved. Contact support.','err');return false;
+    }
+    continue;
+   }
+   for(let retry=0;retry<3;retry++){
+    const body=coBody(co),h=fnv(JSON.stringify(body));
+    if(PUSHED[co.id]===h)break;
+    const {data,error}=await SB.from('companies')
+      .update({data:body,name:co.name,tin:(co.tin||'').toUpperCase(),version:co._v+1})
+      .eq('id',co.id).eq('version',co._v).select('version');
+    if(error){
+     toast('Cloud save failed: '+error.message+' — keep this tab open.','err');return false;
+    }
+    if(data?.length){
+     co._v=data[0].version;
+     BASELINES[co.id]=clone(body);
+     PUSHED[co.id]=h;
+     await syncLinks(co);
+     break;
+    }
+    // Optimistic lock failed. Reload server snapshot and merge only independent
+    // records. Never silently replace the same invoice or payment edited elsewhere.
+    const {data:latest,error:readErr}=await SB.from('companies')
+      .select('version,data,status,plan').eq('id',co.id).maybeSingle();
+    if(readErr||!latest){
+     toast('Could not check concurrent edits. Keep this tab open and retry.','err');return false;
+    }
+    if(latest.status!=='active'){
+     toast('This company was suspended while you were editing. No changes sent.','err');return false;
+    }
+    const merged=window.MYR_CONCURRENCY?.mergeCompany(BASELINES[co.id],body,latest.data||{});
+    if(!merged?.ok){
+     toast('Concurrent edit conflict: '+(merged?.conflicts||['Please reload after exporting a backup']).slice(0,3).join(', ')+'. Your local changes were NOT overwritten.','err');
+     return false;
+    }
+    Object.assign(co,merged.data);
+    co.status=latest.status;co.plan=latest.plan;co._v=latest.version;
+    BASELINES[co.id]=clone(latest.data||{});
+    PUSHED[co.id]=fnv(JSON.stringify(latest.data||{}));
+    if(retry===2){
+     toast('Several people are editing this company. Changes kept locally; retry save.','warn');
+     return false;
+    }
+   }
+  }
+  UNSYNCED_CLOUD=DB.companies.some(c=>c._v&&PUSHED[c.id]!==fnv(JSON.stringify(coBody(c))));
+  if(UNSYNCED_CLOUD){clearTimeout(PUSH_T);PUSH_T=setTimeout(cloudPush,700)}
+  return !UNSYNCED_CLOUD;
+ }catch(e){
+  console.error('MYR Invoice cloud save',e);
+  toast('Cloud save failed: '+(e.message||String(e)),'err');return false;
+ }finally{PUSHING=false}
+}
+async function cloudCreate(co){const body=coBody(co);const {error}=await SB.from('companies').insert({id:co.id,name:co.name,tin:(co.tin||'').toUpperCase(),plan:'Starter',data:body});if(error){toast('Could not create company: '+error.message,'err');return false}/* INSERT without RETURNING: owner membership is added by the AFTER INSERT trigger. The new row is not SELECT-visible until that trigger has run. */co.plan='Starter';co._v=1;co.status='active';PUSHED[co.id]=fnv(JSON.stringify(body));BASELINES[co.id]=clone(body);LINKS[co.id]=new Set();await syncLinks(co);return true}
 function newPwModal(){modal('Set a new password',field('np-pw','New password (min 8 characters)','','password','autocomplete="new-password"'),`<button class="btn p" onclick="(async()=>{const pw=$('#np-pw').value;if(pw.length<8)return toast('Minimum 8 characters.','err');const {error}=await SB.auth.updateUser({password:pw});if(error)return toast(error.message,'err');closeModal();toast('Password updated')})()">Update password</button>`)}
 async function forgotPw(){const email=(val('li-email')||'').toLowerCase();if(!CLOUD)return toast('Password reset emails work once the Supabase backend is connected.','warn');if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))return authErr('Enter your email above, then click Forgot password.');const {error}=await SB.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});if(error)return authErr(error.message);$('#auth-err').innerHTML='<div class="note ok mb">If an account exists, a reset link has been sent to your email.</div>'}
 const isPlatformAdmin=()=>CLOUD?!!PROFILE?.is_platform_admin:(CFG.adminEmails.length?CFG.adminEmails.map(e=>e.toLowerCase()).includes(DB.session):DB.users[0]?.email===DB.session);
