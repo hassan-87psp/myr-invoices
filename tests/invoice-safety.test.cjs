@@ -30,7 +30,7 @@ const sandbox = vm.createContext({
   calc: i => ({total:i.items.reduce((a,v)=>a+v.qty*v.price,0)}),
   toast: (m) => {messages.push(m)}, audit: ()=>{}, tl: ()=>{},
   save:()=>{saves++}, go:()=>{}, clearTimeout:()=>{},
-  cloudPush: async()=>true, CLOUD:false, PUSH_T:null,
+  cloudPush: async()=>true, CLOUD:false, PUSH_T:null, atomicEnabled:()=>false,
   bCheck:()=>({errors:[]}), $:()=>null, ED, DB:{session:'test@example.invalid'},
   uuid:()=> 'uuid-test', confirmBox:()=>{}, INVOICE_SAVING:false
 });
