@@ -114,3 +114,12 @@ Date: 18 November 2026
 - GitHub static validation and Pages publication latest workflows succeeded.
 - Supabase advisory still lists intentionally restricted no-policy tables, protected SECURITY DEFINER RPCs, and Auth leaked-password protection warning. Review Auth password security and public buyer-link access before commercial launch.
 - Phase 1C canonical database cutover deliberately remains OFF: individual invoice/customer/payment writes still use companies.data JSON and synced mirrors. Full per-record canonical writes, real two-account browser tests, offsite backup/restore, bulk-import number allocation and formal production sign-off remain pending.
+
+## 19 November 2026 — Transactional per-record rollout
+
+- Added and enabled guarded Supabase record-save RPC for invoices/customers/products and idempotent per-invoice payment RPC. Every save locks the tenant, checks allowed roles, validates expected versions where relevant, and updates `companies.data` plus protected mirrors in one transaction.
+- Added automatic payment amount and overpayment checks on the server and rejected stale customer updates. Simulated Invoice Staff/Accountant edits of one record reject stale overwrites.
+- Added private per-change company revision journal with recovery status counts. Pre-cutover snapshot still exists. All test changes rolled back, leaving existing data unchanged.
+- Added permanent append-only database audit entries for atomic records and payments; rollback-only SQL tests recorded exactly three expected audit actions.
+- GitHub tests include atomic invoice/payment Save handlers, frontend syntax, financial calculations, invoice protection, numbering, HTML print markup and concurrency merges. GitHub Pages static publishing succeeded after the feature flag was enabled.
+- **Still not production sign-off:** normalized tables are mirrors, not canonical; two actual browser sessions, actual PDF print, independent encrypted offsite backup/restore, remaining workflow cutover, external transactional email/MyInvois gateway/billing and commercial hosting remain pending.
