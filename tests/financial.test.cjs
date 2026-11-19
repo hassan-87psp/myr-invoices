@@ -34,6 +34,23 @@ assert.equal(funcs.myrSen(1000, {currency:'USD'}), 0);
 assert.equal(funcs.fxMissing([{currency:'USD', fxRate:''}]), true);
 assert.equal(funcs.fxMissing([{currency:'USD', fxRate:'4.65'}, {currency:'MYR'}]), false);
 
+
+const permissions = new Function(
+  'CO','ROLE_PERMS','role',
+  codeLine('const can=') + '\nreturn can;'
+);
+let suspended = false;
+const can = permissions(
+  () => ({status:suspended?'suspended':'active'}),
+  {'Owner':['View','Create','Edit Draft','Download','Export','Access Billing']},
+  () => 'Owner'
+);
+assert.equal(can('Create'), true);
+suspended = true;
+assert.equal(can('Create'), false, 'Suspended company must be read-only');
+assert.equal(can('View'), true, 'Suspended company remains readable');
+assert.equal(can('Download'), true, 'Permitted downloads remain available');
+
 const inputs = {'py-a':'12.50','py-d':'2026-11-19','py-m':'Bank transfer','py-r':'SAMPLE-1'};
 const toasts = [];
 const inv = {id:'invoice1',currency:'MYR',lhdn:{status:'Not Submitted'},payments:[]};
