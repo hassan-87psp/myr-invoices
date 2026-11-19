@@ -63,3 +63,14 @@ Automated database tests on 19 Nov passed in rollback-only transactions: read pe
 ## Production restrictions
 
 GitHub Pages and the public GitHub repository are a test deployment, not suitable for commercial SaaS with private code. Payment gateway, customer transactional email and real LHDN authorization/submission remain pending.
+
+## 19 November 2026 — staged transactional record writes enabled
+
+- **Enabled** `atomicRecordWrites: true` in `config.js`. Owner/Admin/Accountant/Invoice Staff invoice, customer and product create/edit operations now call `atomic_save_record`, using company row locks, tenant membership authorization and per-record expected snapshots. Customer archiving also uses the new RPC.
+- Payment recording calls `atomic_add_payment` with amount/date checks, server-side outstanding balance enforcement, and stable idempotent payment IDs. Repeated requests with changed client timestamps do not duplicate a payment.
+- Existing `companies.data` is updated transactionally and its protected invoice/customer/product/line/payment mirrors update automatically; **canonical normalized-only cutover remains OFF**.
+- Database writes capture private previous company revisions. Atomic record and payment actions also insert RLS-protected, append-only `audit_logs` entries.
+- Data Integrity admin view reports private revision counts and clearly labels offsite backup as unverified.
+- Source code, deployment and automated tests verified; transactional SQL tests covered multi-role stale edit conflicts, wrong-role access, overpayment, payment idempotence, audit events and mirror parity.
+- The reversible feature toggle, backup limits and remaining E2E/cutover requirements are documented in `RECOVERY_AND_CUTOVER.md`.
+- Limitation: the browser still uses compatibility JSON for other workflows (approval, import, some deletes/settings). Actual two-user browser testing, PDF printing and a full restore from an **independent** offsite backup remain unverified.
