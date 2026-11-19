@@ -57,3 +57,21 @@ Date: 18 November 2026
 - Database role tests: authorized platform admin can read company/user/monitor aggregates; synthetic unauthorised account is rejected; transaction-scoped demo insert is excluded from admin aggregate and rolled back.
 - Inline JavaScript parsed without syntax errors after edits. GitHub commits made to main; independent external HTTP check of the GitHub Pages release was not possible from this environment.
 - Still pending: real browser click-through, full demo invoice edit/print/payment end-to-end, SMTP delivery for business notifications, actual authorized LHDN sandbox transaction, payment gateway and independent production security review.
+
+## 19 November 2026 — Phase 1 financial/data integrity pass
+
+### Improvements deployed to source
+- Dashboard, Payments and Reports aggregate foreign-currency invoices into MYR-equivalent sen using each document's own recorded exchange rate. A warning identifies foreign-currency records missing an exchange rate; these are not silently treated as MYR.
+- Dashboard's invoice-vs-collection history, overdue and outstanding KPIs were updated to use matching MYR units.
+- Invoice save, approval and mark-ready confirmation now waits for the Supabase cloud save to return success. Payment recording also confirms cloud save, and locks against double click during the operation.
+- Unsaved cloud changes are tracked explicitly. A retry control and before-unload confirmation help prevent reloading and losing pending edits. Concurrent changes arriving during an in-flight sync are detected and queued again.
+- Payment entry validates numeric positive two-decimal amounts, no overpayment, date not in the future, role access and cancellation status.
+- Suspended tenants operate in read-only mode in the UI; the cloud save layer now rejects unsaved changes for suspended accounts rather than silently skipping them. Server/database restrictions continue to apply.
+- The manual payment reminder action now says "Prepare email". It only opens an email draft, never logs or claims delivery. Automatic reminder preferences are explicitly labeled as not yet implemented.
+- GitHub Actions validates frontend JavaScript syntax and executes tests/financial.test.cjs for totals, FX conversion, date/amount checks and suspended role access.
+
+### Verification and limitations
+- Isolated financial/payment regression checks performed against extracted live frontend functions passed.
+- Repository validation workflow succeeded on 19 November 2026 (runs listed in GitHub Actions). Each future push reruns the suite; check most recent Actions run for final status.
+- No real payment gateway, mail transport or real MyInvois submission was invoked.
+- Full browser end-to-end run (create/edit/print/payment across real user sessions), concurrency under several actual users, normalized per-record database permissions, formal tax/FX treatment, security penetration testing and commercial hosting remain pending.
