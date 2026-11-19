@@ -30,6 +30,18 @@ dupA.invoices.push({id:'c1',number:'INV-1001'});
 dupB.invoices.push({id:'c2',number:'inv-1001'});
 assert.equal(mergeCompany(base,dupA,dupB).ok,false,'Simultaneous number collision must be rejected');
 
+
+const autoBase=make(),autoLocal=make(),autoRemote=make();
+autoLocal.invoices.push({id:'local-new',number:'INV-1001',items:[],payments:[]});
+autoRemote.invoices.push({id:'remote-new',number:'INV-1001',items:[],payments:[]});
+autoLocal.nextNo=1002;
+autoRemote.nextNo=1002;
+const sequenced=mergeCompany(autoBase,autoLocal,autoRemote);
+assert.equal(sequenced.ok,true,'Concurrent auto-generated numbers should be resequenced safely');
+assert.equal(sequenced.data.invoices.find(i=>i.id==='remote-new').number,'INV-1001');
+assert.equal(sequenced.data.invoices.find(i=>i.id==='local-new').number,'INV-1002');
+assert.equal(sequenced.data.nextNo,1003);
+
 const settingA=make(),settingB=make();
 settingA.name='Owner changed name';settingB.name='Other editor changed name';
 assert.equal(mergeCompany(base,settingA,settingB).ok,false,'Settings collisions must be rejected');
