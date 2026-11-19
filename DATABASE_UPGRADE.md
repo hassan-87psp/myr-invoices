@@ -39,6 +39,21 @@ Automated database tests on 19 Nov passed in rollback-only transactions: read pe
 
 **Important limitation:** customer_records, invoice_line_records and payment_records are **mirrors**, not yet the canonical source. Safe merge protects different record IDs but does not permit two users to edit the very same invoice simultaneously. Full per-record server-side APIs, atomic invoice allocation for all save paths, independent payments/customer writes, browser end-to-end testing with two real accounts, and tested data cutover remain next-stage work.
 
+## Phase 1C staging — 19 November 2026
+
+- Added a private, durable invoice-number reservation table with one reservation per company/invoice ID and a case-insensitive unique invoice-number index.
+- Added authenticated `reserve_invoice_number` RPC. It takes a transaction-level row lock on the company, verifies the signed-in user's active Owner/Admin/Accountant/Invoice Staff membership, checks existing invoices/reservations and assigns the next unique number. Repeating the same invoice ID returns the same reservation.
+- Added database trigger to reject invoice saves that attempt to claim another invoice's reserved number. Disabled anonymous browser access to both the reservation table and the RPC.
+- Connected the invoice editor's new automatic-number flow to this RPC. The client reserves only during Save, not during preview. A failure does not insert the new invoice. Manually entered custom numbers still use existing validation and database uniqueness; bulk import/other document paths do not yet use this RPC.
+- Created a protected internal `company_snapshots` table and captured a pre-cutover company-data snapshot. This is a **same-database safety snapshot**, not an offsite backup or automatic restoration service. Snapshots carry a 30-day expiry timestamp; deletion scheduling is not implemented.
+- Created an internal exact JSON `mirror_parity` view comparing customers, products, invoices, line items and payments between existing company data and normalized tables. Official LHDN statuses are excluded from invoice snapshots.
+- Added restricted `admin_mirror_parity` aggregate RPC and a Super Admin **Data Integrity** page (`#/admin/integrity`) showing source/mirror counts, match status and a refresh action. Platform admins see counts only, never invoice contents.
+- Added `tests/numbering.test.cjs` to the GitHub Actions suite to verify the new-invoice save path uses the server number, does not mutate data after a failed reservation, and respects manually entered numbers.
+
+**Verified without affecting existing records:** SQL rollback tests showed idempotent INV-1001 allocation, next unique INV-1002, nonmember access denied, another invoice cannot reuse a reserved number, and all five source/mirror groups exactly match in a simulated invoice/customer/payment transaction. Existing live business data has 1 company, 1 customer and no invoices; current parity reports 5/5 matching record groups.
+
+**Important limitations:** The existing `companies.data` JSON remains authoritative. This is **not the completed canonical database cutover**. The new number reservation is transactional, but creating/saving an invoice is still a subsequent database operation, so uncommitted reservations may leave harmless number gaps. Real browser PDF printing, two-account end-to-end testing, per-record invoice/payment write APIs, independent offsite backups, automatic snapshot retention cleanup and a reversible production cutover feature flag still need implementation and sign-off.
+
 ## Next stage (NOT YET complete)
 
 **Phase 1B completion — canonical per-record writes**: Convert the read-only mirrors into authoritative tenant-safe record APIs with per-record revision checks, atomic server-side invoice-number allocation, independent payment/customer writes and real two-account concurrent-edit tests. Backfill/reconcile all historical data. Only after parity is proven should invoice reads/writes switch away from the `companies.data` blob.
