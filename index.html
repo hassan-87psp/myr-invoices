@@ -3434,7 +3434,7 @@ function vHelp(){return ph('Help & Support','Guides, official references and sup
 
 /* ================= Super Admin ================= */
 let ADM={loaded:false,rows:[],events:[],users:[],audit:[],err:''};
-const ANAV=[['','Overview','grid'],['businesses','Businesses','brief'],['subscriptions','Subscriptions','receipt'],['monitor','LHDN API Monitor','plug'],['users','Users','users'],['demo','Demo Lab','grid'],['security','Security & Audit','lock']];
+const ANAV=[['','Overview','grid'],['businesses','Businesses','brief'],['subscriptions','Subscriptions','receipt'],['monitor','LHDN API Monitor','plug'],['users','Users','users'],['demo','Demo Lab','grid'],['integrity','Data Integrity','shield'],['security','Security & Audit','lock']];
 async function adminFetch(){try{const [a,e,u,l]=await Promise.all([SB.rpc('admin_companies'),SB.rpc('admin_events',{p_limit:200}),SB.rpc('admin_users'),SB.from('audit_logs').select('created_at,actor_email,action,detail').like('action','admin.%').order('created_at',{ascending:false}).limit(100)]);for(const result of [a,e,u,l]){if(result.error)throw result.error}ADM={loaded:true,rows:a.data||[],events:e.data||[],users:u.data||[],audit:l.data||[],err:''}}catch(err){ADM={loaded:true,rows:[],events:[],users:[],audit:[],err:'Could not load admin data: '+err.message}}if(location.hash.startsWith('#/admin'))route()}
 function adminLocal(){const adm=e=>CFG.adminEmails.length?CFG.adminEmails.map(x=>x.toLowerCase()).includes(e):DB.users[0]?.email===e;
  const rows=DB.companies.map(c=>{const st=s=>c.invoices.filter(i=>i.lhdn.status===s).length;return {id:c.id,name:c.name,tin:c.tin,plan:c.plan,status:c.status||'active',created_at:c.createdAt,owner:(c.members.find(m=>m.role==='Owner')||{}).email,members:c.members.length,invoices:c.invoices.length,valid:st('Valid'),invalid:st('Invalid'),processing:st('Submitted'),docs_month:usageNow(c),last_ok:c.lhdn.lastOk,rate_limits:c.lhdn.incidents.filter(x=>x.type==='429').length}});
@@ -3444,6 +3444,16 @@ function adminLocal(){const adm=e=>CFG.adminEmails.length?CFG.adminEmails.map(x=
 function adminShell(t,body){document.title='Super Admin — MYR Invoice';return `<div class="app"><aside class="side" id="side"><a class="brand" href="#/admin">${LOGO(32)}<div><b>MYR Invoice</b><small>Super Admin</small></div></a><nav class="nav">${ANAV.map(([k,l,i])=>`<a href="#/admin${k?'/'+k:''}" class="${k===t?'on':''}" onclick="$('#side').classList.remove('open')">${ic(i)}<span>${l}</span></a>`).join('')}</nav><div class="side-f">${myCos().length?`<a href="#/app/dashboard" style="color:#fff">← Business app</a>`:''}</div></aside><div class="scrim" onclick="toggleSide()"></div>
  <div class="main"><header class="top"><button class="btn g menu-btn" onclick="toggleSide()" aria-label="Menu">${ic('menu')}</button><b style="color:var(--navy)">Super Admin</b><span class="badge b-navy">Platform</span><div style="flex:1"></div>${CLOUD?`<button class="btn sm" onclick="ADM.loaded=false;route()">${ic('refresh',14)}<span class="hide-sm">Refresh</span></button>`:''}<div class="avatar" title="${esc(DB.session)}">${esc((user()?.name||'A')[0])}</div><button class="btn g sm" onclick="logout()" aria-label="Log out">${ic('out',16)}</button></header>
  ${CLOUD?'':'<div class="localbar">Local mode — Super Admin shows companies stored in this browser only.</div>'}<main class="content">${ADM.err?`<div class="note e mb">${esc(ADM.err)}</div>`:''}${body}</main></div></div>`}
+let PARITY={loaded:false,rows:[],err:''};
+async function adminLoadParity(){
+ if(!CLOUD)return;
+ try{
+  const {data,error}=await SB.rpc('admin_mirror_parity');
+  if(error)throw error;
+  PARITY={loaded:true,rows:Array.isArray(data)?data:[],err:''};
+ }catch(e){PARITY={loaded:true,rows:[],err:'Could not read mirror parity: '+(e.message||String(e))}}
+ if(location.hash.startsWith('#/admin/integrity'))route();
+}
 function vAdmin(p){const t=p[0]||'';if(CLOUD&&!ADM.loaded){adminFetch();return adminShell(t,`<div class="grid g4">${'<div class="card kpi"><div class="skel mb8" style="width:60%"></div><div class="skel" style="height:24px"></div></div>'.repeat(4)}</div>`)}
  const D=CLOUD?ADM:adminLocal();const R=D.rows;const price=pl=>(PLANS.find(x=>x.id===pl)||{price:0}).price;const lim=pl=>(PLANS.find(x=>x.id===pl)||{docs:Infinity}).docs;
  const active=R.filter(r=>r.status==='active');const sum=k=>R.reduce((a,r)=>a+(+r[k]||0),0);const done=sum('valid')+sum('invalid');
@@ -3468,6 +3478,30 @@ function vAdmin(p){const t=p[0]||'';if(CLOUD&&!ADM.loaded){adminFetch();return a
   '<div class="card pad mt"><h3 class="mb8">Your demo workspace</h3><p class="muted sm mb">Create an isolated fictional company with sample customers, products, invoices and payment records. Your existing company remains unchanged.</p>'+
   (demos.length?demos.map(c=>'<div class="row sb" style="gap:12px;padding:12px 0;border-top:1px solid var(--line);flex-wrap:wrap"><div><b>'+esc(c.name)+'</b><div class="muted sm">'+c.invoices.length+' invoices · '+c.customers.length+' customers · '+c.products.length+' products</div></div><button class="btn p sm" onclick="openDemo(\''+c.id+'\')">Open demo workspace</button></div>').join(''):'<button class="btn p" onclick="demoCompany()">Create fictional demo workspace</button>')+
   '</div><div class="card pad mt"><h3 class="mb8">Recommended tests</h3><p class="muted sm">Create an invoice → save a draft → edit items → print/download PDF → record a payment → review reports. Use E-Invoice Centre for local compliance validation only.</p><p class="muted sm mt8">To test real MyInvois submission later, a registered taxpayer must separately authorize the intermediary.</p><div class="row mt" style="gap:10px;flex-wrap:wrap"><button class="btn sm" onclick="previewDemoLhdn(\'valid\')">Preview simulated acceptance</button><button class="btn sm" onclick="previewDemoLhdn(\'invalid\')">Preview simulated rejection</button></div></div>')}
+ if(t==='integrity'){
+  const title=head('Data Integrity','Compare each company’s original records with the separate database mirrors. No customer or invoice contents are shown.');
+  if(!CLOUD)return adminShell(t,title+'<div class="note w">Live reconciliation is available only in cloud mode.</div>');
+  if(!PARITY.loaded){adminLoadParity();return adminShell(t,title+'<div class="card pad">Checking protected database records…</div>')}
+  const fields=[['Customers','customers'],['Products','products'],['Invoices','invoices'],['Invoice items','lines'],['Payments','payments']];
+  const good=r=>fields.every(([,key])=>r[key+'_match']===true);
+  const passed=PARITY.rows.filter(good).length,failed=PARITY.rows.length-passed;
+  const name=r=>(R.find(c=>c.id===r.company_id)?.name)||('Company '+String(r.company_id).slice(0,8));
+  return adminShell(t,title+
+    (PARITY.err?'<div class="note e mb">'+esc(PARITY.err)+'</div>':'')+
+    '<div class="row mb" style="justify-content:flex-end"><button class="btn sm" onclick="PARITY.loaded=false;route()">Run check again</button></div>'+
+    '<div class="grid g3">'+k('Companies checked',PARITY.rows.length,'Including demo workspaces')+
+    k('Matching',passed,'All five record groups')+
+    k('Require investigation',failed,'Do not cut over until zero')+'</div>'+
+    (failed?'<div class="note w mt"><b>Reconciliation mismatch detected.</b> The old database remains authoritative. Investigate these records before any cutover.</div>':'<div class="note ok mt">All checked records match their database mirrors. This is not a final production cutover approval.</div>')+
+    '<div class="card mt"><div class="ch"><h3>Company data reconciliation</h3></div>'+
+    '<div class="tw"><table class="t"><thead><tr><th>Company</th>'+
+    fields.map(([label])=>'<th>'+label+'</th>').join('')+'<th>Result</th></tr></thead><tbody>'+
+    PARITY.rows.map(r=>'<tr><td><b>'+esc(name(r))+'</b><div class="muted sm">'+esc(String(r.company_id).slice(0,8))+'</div></td>'+
+      fields.map(([,key])=>'<td class="nowrap">'+r['source_'+key]+' / '+r['mirror_'+key]+' '+(r[key+'_match']?'✓':'✕')+'</td>').join('')+
+      '<td>'+ (good(r)?'<span class="badge b-ok">Match</span>':'<span class="badge b-err">Mismatch</span>') +'</td></tr>').join('')+
+    '</tbody></table></div></div>'+
+    '<div class="note mt">Source / Mirror counts. Backups are private; the customer-facing system still uses the existing company data while the remaining full cutover tests are pending.</div>');
+ }
  if(t==='security')return adminShell(t,head('Security & Audit','Platform controls and admin action history.')+`<div class="grid g2"><div class="card pad"><h3 class="mb">Platform safeguards</h3>${[['Tenant isolation','Row-level security by company membership (verified email).'],['Official status integrity','LHDN results are written only by the server function; browsers cannot mark a document Valid.'],['Secrets','LHDN credentials live in Supabase Edge Function secrets, never in the browser.'],['Admin visibility','Admins see aggregates only — no invoice contents and no impersonation.'],['Append-only audit','Audit log rows cannot be edited or deleted by users.'],['Public links','Buyer QR and invoice links are random tokens with expiry and submission limits.']].map(([a,b])=>`<div class="list-i"><span class="pri l"></span><div><b class="sm">${a}</b><div class="muted sm">${b}</div></div></div>`).join('')}</div>
   <div class="card"><div class="ch"><h3>Admin actions</h3></div>${D.audit.length?D.audit.slice(0,50).map(a=>`<div class="pad-s sm" style="border-bottom:1px solid var(--line)"><b>${esc(a.action)}</b> <span class="muted">${esc(a.detail)}</span><div class="muted" style="font-size:11.5px">${fmtDT(a.created_at)} · ${esc(a.actor_email)}</div></div>`).join(''):`<p class="muted pad">No admin actions yet.</p>`}</div></div>`);
  const newR=R.filter(r=>r.created_at&&new Date(r.created_at)>new Date(Date.now()-30*864e5)).length;
