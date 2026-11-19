@@ -47,3 +47,4 @@ jobs:
           node tests/invoice-safety.test.cjs
           node tests/concurrency.test.cjs
           node tests/numbering.test.cjs
+          node tests/pdf-markup.test.cjs
