@@ -2749,18 +2749,21 @@ async function atomicReady(co){
 }
 function atomicApply(co,result,before){
  if(!result||!result.company_data||!Number.isInteger(Number(result.version)))return false;
- const server=clone(result.company_data);
- const after=coBody(co);
+ const server=clone(result.company_data),after=coBody(co);
  const merged=window.MYR_CONCURRENCY?.mergeCompany(before||after,after,server);
  if(!merged?.ok){
-  toast('Record saved on server but local changes conflict. Keep this page open and refresh only after exporting your work.','err');
+  toast('Record saved on server but other unsaved changes conflict. Keep this page open and export your changes before refreshing.','err');
   return false;
  }
- const members=co.members, status=co.status, plan=co.plan;
+ const members=co.members,status=co.status,plan=co.plan;
+ for(const key of Object.keys(co))
+  if(!['_v','members','status'].includes(key))delete co[key];
  Object.assign(co,merged.data);
  co.members=members;co.status=status;co.plan=plan;co._v=Number(result.version);
- BASELINES[co.id]=clone(server);
- PUSHED[co.id]=fnv(JSON.stringify(server));
+ const local=coBody(co);
+ const same=window.MYR_CONCURRENCY.canonical(local)===window.MYR_CONCURRENCY.canonical(server);
+ BASELINES[co.id]=clone(same?local:server);
+ PUSHED[co.id]=fnv(JSON.stringify(same?local:server));
  UNSYNCED_CLOUD=DB.companies.some(c=>c._v&&PUSHED[c.id]!==fnv(JSON.stringify(coBody(c))));
  if(UNSYNCED_CLOUD)save();
  return true;
