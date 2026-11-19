@@ -90,3 +90,14 @@ Date: 18 November 2026
 - All transactional probes rolled back. Existing company/customer data retained.
 - **Not yet complete:** canonical per-invoice write migration, multi-user true row-level editing, data normalization for customers/payments/line items, actual browser PDF test, and cross-user concurrency.
 - Full migration rationale and next stages: `DATABASE_UPGRADE.md`.
+
+## 19 November 2026 — Phase 1B normalized records and multi-user merge
+- Added customer_records, product_records, invoice_line_records and payment_records with RLS, member-only SELECT and no direct browser write grants.
+- Internal SQL trigger mirrors company JSON changes transactionally into normalized read-only tables. Company JSON remains the source of truth and existing data was not deleted.
+- Added concurrency.js with three-way, record-ID-based merging on company-version conflicts. Different invoice/customer edits can merge; concurrent same-record edits are refused instead of silently overwritten.
+- Added best-effort automatic re-sequencing for concurrent default invoice number collisions. Manually duplicated numbers remain forbidden; DB invoice number unique index is the final safeguard.
+- Invoice Staff/Accountant may increment nextNo only when adding invoice records; supplier and account settings stay protected. SQL tests confirmed staff create permitted and counter-only settings update denied.
+- Rollback-only database tests confirmed customer/product/invoice/line/payment mirroring, deletion propagation, isolation of non-member accounts and prevention of forged LHDN status in invoice snapshots.
+- GitHub CI runs frontend validation plus financial, invoice-safety and concurrency regression tests.
+- Still pending: canonical per-record write APIs, fully atomic server-side number allocation, two real-user browser E2E/concurrency testing, payment writes independent of invoice data, and complete verified cutover.
+- Supabase advisory still warns about intentional public-link SECURITY DEFINER functions and leaked-password protection; assess before commercial launch.
