@@ -19,6 +19,9 @@ window.MYR_CONFIG = {
   // Show the "fictional demo company" button (default: true locally, false in cloud)
   allowDemo: false,
 
+  // Transactional record saves with per-record revisions; set false to roll back to legacy saves.
+  atomicRecordWrites: true,
+
   supportEmail: 'support@myrinvoice.com'
 
   // Optional: override plans/prices
