@@ -6,6 +6,7 @@ on:
     paths:
       - "index.html"
       - "config.js"
+      - "concurrency.js"
       - "tests/**"
       - ".github/workflows/pages.yml"
   pull_request:
@@ -36,6 +37,7 @@ jobs:
           if (!scripts.length) throw new Error('No app scripts found');
           scripts.forEach((script, i) => new vm.Script(script[2], { filename: 'inline-' + i + '.js' }));
           new vm.Script(config, { filename: 'config.js' });
+          new vm.Script(fs.readFileSync('concurrency.js', 'utf8'), { filename: 'concurrency.js' });
           if (/sb_secret_[a-z0-9_-]+/i.test(config)) throw new Error('Secret key is embedded in the browser config');
           console.log('Validated ' + scripts.length + ' inline scripts and config.js');
           NODE
@@ -43,3 +45,4 @@ jobs:
         run: |
           node tests/financial.test.cjs
           node tests/invoice-safety.test.cjs
+          node tests/concurrency.test.cjs
