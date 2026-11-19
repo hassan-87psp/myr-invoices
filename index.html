@@ -3444,8 +3444,35 @@ async function sendCorrection(){const msg=val('pc-m'),email=val('pc-e');if(!msg)
 
 /* ================= Products ================= */
 function vProducts(){const co=CO();return ph('Products & Services','Saved items with classification codes, units and tax treatment.',`<button class="btn p" onclick="prodModal()">${ic('plus',16)}Add item</button>`)+`<div class="card">${co.products.length?`<div class="tw"><table class="t"><thead><tr><th>Item</th><th>Classification</th><th>Unit</th><th class="r">Price</th><th>Tax</th><th></th></tr></thead><tbody>${co.products.map(p=>`<tr><td><b>${esc(p.name)}</b>${p.desc&&p.desc!==p.name?`<div class="muted sm">${esc(p.desc)}</div>`:''}</td><td class="sm">${esc(p.classCode)} — ${esc(CLASS[p.classCode]||'?')}</td><td>${esc(p.unitCode)}</td><td class="r num">${money(p.price)}</td><td class="sm">${esc(p.taxType)}${+p.taxRate?' · '+p.taxRate+'%':''}</td><td class="r nowrap"><button class="btn sm" onclick="prodModal('${p.id}')">Edit</button><button class="btn sm g d" onclick="delProd('${p.id}')">Delete</button></td></tr>`).join('')}</tbody></table></div>`:empty('pkg','No saved items','Save frequently sold products and services to create invoices faster.',`<button class="btn p" onclick="prodModal()">Add item</button>`)}</div>`}
-function prodModal(id){const p=id?CO().products.find(x=>x.id===id):{name:'',desc:'',classCode:'022',unitCode:'C62',price:0,taxType:'06',taxRate:0};modal(id?'Edit item':'Add item',`${field('pm-n','Name *',p.name)}${field('pm-d','Description on invoice',p.desc)}<div class="fg"><label class="f">Classification code</label><select id="pm-c">${opt(Object.entries(CLASS).map(([k,v])=>[k,k+' — '+v]),p.classCode)}</select></div><div class="grid g3"><div class="fg"><label class="f">Unit</label><select id="pm-u">${opt(UNITS,p.unitCode)}</select></div>${field('pm-p','Unit price (RM)',(p.price/100).toFixed(2),'text','inputmode="decimal"')}${field('pm-r','Tax rate %',p.taxRate,'number','min="0" max="100" step="any"')}</div><div class="fg"><label class="f">Tax type</label><select id="pm-t">${opt(TAX_TYPES,p.taxType)}</select></div>`,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn p" onclick="saveProd('${id||''}')">Save</button>`)}
-function saveProd(id){const co=CO();const d={name:val('pm-n'),desc:val('pm-d')||val('pm-n'),classCode:val('pm-c'),unitCode:val('pm-u'),price:toSen(val('pm-p')),taxType:val('pm-t'),taxRate:val('pm-t')==='06'?0:+val('pm-r')||0};if(!d.name)return toast('Name is required.','err');if(d.price<0)return toast('Price cannot be negative.','err');if(id)Object.assign(co.products.find(x=>x.id===id),d);else co.products.push({id:uuid(),...d});audit(co,'product.save',d.name);save();closeModal();rerender()}
+let PROD_EXPECTED=null;
+function prodModal(id){const p=id?CO().products.find(x=>x.id===id):{name:'',desc:'',classCode:'022',unitCode:'C62',price:0,taxType:'06',taxRate:0};PROD_EXPECTED=id?clone(p):null;modal(id?'Edit item':'Add item',`${field('pm-n','Name *',p.name)}${field('pm-d','Description on invoice',p.desc)}<div class="fg"><label class="f">Classification code</label><select id="pm-c">${opt(Object.entries(CLASS).map(([k,v])=>[k,k+' — '+v]),p.classCode)}</select></div><div class="grid g3"><div class="fg"><label class="f">Unit</label><select id="pm-u">${opt(UNITS,p.unitCode)}</select></div>${field('pm-p','Unit price (RM)',(p.price/100).toFixed(2),'text','inputmode="decimal"')}${field('pm-r','Tax rate %',p.taxRate,'number','min="0" max="100" step="any"')}</div><div class="fg"><label class="f">Tax type</label><select id="pm-t">${opt(TAX_TYPES,p.taxType)}</select></div>`,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn p" onclick="saveProd('${id||''}')">Save</button>`)}
+async function saveProd(id){
+ const co=CO();
+ if(!can('Edit Draft'))return toast('Not allowed to edit products.','err');
+ const d={name:val('pm-n'),desc:val('pm-d')||val('pm-n'),
+  classCode:val('pm-c'),unitCode:val('pm-u'),price:toSen(val('pm-p')),
+  taxType:val('pm-t'),taxRate:val('pm-t')==='06'?0:+val('pm-r')||0};
+ if(!d.name)return toast('Name is required.','err');
+ if(d.price<0)return toast('Price cannot be negative.','err');
+ const original=id?co.products.find(x=>x.id===id):null;
+ if(id&&!original)return toast('Product not found.','err');
+ const product=id?Object.assign(clone(original),d):{id:uuid(),...d};
+ if(atomicEnabled()){
+  if(!(await atomicReady(co)))return;
+  const before=coBody(co);
+  const {data,error}=await SB.rpc('atomic_save_record',{
+   p_company_id:co.id,p_kind:'products',p_record:product,
+   p_expected:id?PROD_EXPECTED:null
+  });
+  if(error||!data)return toast('Product not saved: '+(error?.message||'Unknown error'),'err');
+  if(!atomicApply(co,data,before))return;
+ }else{
+  if(id)Object.assign(original,d);
+  else co.products.push(product);
+  audit(co,'product.save',d.name);save();
+ }
+ PROD_EXPECTED=null;closeModal();rerender();
+}
 function delProd(id){confirmBox('Delete item?','Existing invoices keep their lines.','Delete',()=>{const co=CO();co.products=co.products.filter(p=>p.id!==id);save();rerender()},true)}
 
 /* ================= Payments ================= */
