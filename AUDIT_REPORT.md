@@ -75,3 +75,18 @@ Date: 18 November 2026
 - Repository validation workflow succeeded on 19 November 2026 (runs listed in GitHub Actions). Each future push reruns the suite; check most recent Actions run for final status.
 - No real payment gateway, mail transport or real MyInvois submission was invoked.
 - Full browser end-to-end run (create/edit/print/payment across real user sessions), concurrency under several actual users, normalized per-record database permissions, formal tax/FX treatment, security penetration testing and commercial hosting remain pending.
+
+## 19 November 2026 — Database upgrade (Phase 1A) and invoice safety
+
+- Created `public.invoice_records`, a read-only RLS-protected per-invoice mirror synchronized automatically from the existing `companies.data.invoices` array using an internal trigger. Source-of-truth invoice writes remain unchanged during safe migration.
+- Backfilled pre-existing JSON invoice records without deleting or editing the source. Current production data initially has one company and zero invoice records.
+- Applied per-company, case-insensitive invoice-number uniqueness and allowed suspended tenants to read but not modify their invoice snapshots.
+- Mirror strips the JSON `lhdn` sub-object to avoid presenting client-supplied statuses as official LHDN results. Official records remain in `lhdn_documents`.
+- Hardened invoice editing against decreasing totals below recorded payments and against changing locked official/submitted documents.
+- Blocked deleting paid or previously submitted/attempted e-Invoices even when calling the handler directly; successful deletes now require confirmed cloud persistence.
+- Disabled demo public-sharing link generation to match the earlier server-side public-link restriction.
+- Added `tests/invoice-safety.test.cjs` and GitHub validation workflow runs both finance and invoice integrity regression tests.
+- Database verification passed: authenticated tenant read isolation, owner invoice mirror creation within a rolled-back transaction, no fake official status copied, unique number index case-insensitive collision check, and authenticated direct write privileges denied.
+- All transactional probes rolled back. Existing company/customer data retained.
+- **Not yet complete:** canonical per-invoice write migration, multi-user true row-level editing, data normalization for customers/payments/line items, actual browser PDF test, and cross-user concurrency.
+- Full migration rationale and next stages: `DATABASE_UPGRADE.md`.
