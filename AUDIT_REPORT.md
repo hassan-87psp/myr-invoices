@@ -101,3 +101,16 @@ Date: 18 November 2026
 - GitHub CI runs frontend validation plus financial, invoice-safety and concurrency regression tests.
 - Still pending: canonical per-record write APIs, fully atomic server-side number allocation, two real-user browser E2E/concurrency testing, payment writes independent of invoice data, and complete verified cutover.
 - Supabase advisory still warns about intentional public-link SECURITY DEFINER functions and leaked-password protection; assess before commercial launch.
+
+## 19 November 2026 — Phase 1C atomic invoice numbering and integrity audit
+- Applied database migration for invoice_number_reservations, indexed unique numbers and an authenticated, role-checked reserve_invoice_number RPC. A company row-level lock serializes reservations and the same invoice ID returns its original allocation.
+- Added server trigger that refuses a different invoice ID claiming an already reserved number. Anonymous execution/table access is not granted.
+- Connected the ordinary new-invoice editor Save action to the new RPC; failures leave the invoice unsaved. This flow uses the reservation only for automatically suggested numbers (manual numbers, imports and other paths remain subject to existing constraints).
+- Added private, RLS-blocked pre-cutover company snapshots within Supabase. One existing company has one snapshot. These are same-database copies, not independent backups or a tested restoration workflow.
+- Added internal exact JSON parity checks for customers, products, invoices, invoice lines and payments. Created Super Admin-only admin_mirror_parity RPC and Data Integrity page at #/admin/integrity (aggregate counts only).
+- Verified idempotent first/second number reservation (INV-1001, INV-1002), denied unrelated authenticated users, denied a different invoice taking a reserved number, and rollback-only new invoice/customer/item/payment mirror parity (all 5 matches).
+- After all rollback tests: one company, one safety snapshot, zero persisted reservations and zero mirror mismatches. Existing users, companies and invoice data unchanged.
+- Added tests/numbering.test.cjs and tests/pdf-markup.test.cjs to CI. Print markup tests cover draft watermark, sample watermark, totals, QR gating and HTML-escaping including logo attributes; they are not a real physical print/PDF browser test.
+- GitHub static validation and Pages publication latest workflows succeeded.
+- Supabase advisory still lists intentionally restricted no-policy tables, protected SECURITY DEFINER RPCs, and Auth leaked-password protection warning. Review Auth password security and public buyer-link access before commercial launch.
+- Phase 1C canonical database cutover deliberately remains OFF: individual invoice/customer/payment writes still use companies.data JSON and synced mirrors. Full per-record canonical writes, real two-account browser tests, offsite backup/restore, bulk-import number allocation and formal production sign-off remain pending.
