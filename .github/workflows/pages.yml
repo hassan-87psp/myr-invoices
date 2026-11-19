@@ -40,4 +40,6 @@ jobs:
           console.log('Validated ' + scripts.length + ' inline scripts and config.js');
           NODE
       - name: Run financial regression tests
-        run: node tests/financial.test.cjs
+        run: |
+          node tests/financial.test.cjs
+          node tests/invoice-safety.test.cjs
