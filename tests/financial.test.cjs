@@ -70,13 +70,17 @@ const ctx = vm.createContext({
   audit: () => {},
   save: () => {saved++},
   CLOUD: false,
+  atomicEnabled:()=>false,
   closeModal: () => {},
   rerender: () => {},
   clearTimeout: () => {},
   cloudPush: async () => true,
   PUSH_T: null
 });
-vm.runInContext(codeLine('let PAYMENT_SAVING=false;')+'\n'+codeLine('async function savePay(id)')+'\nthis.savePay=savePay;',ctx);
+const payStart=html.indexOf('async function savePay(id){');
+const payEnd=html.indexOf('function remind(id){',payStart);
+assert.ok(payStart>0&&payEnd>payStart,'Payment save handler exists');
+vm.runInContext('let PAYMENT_SAVING=false,PAYMENT_PENDING_ID=null;\n'+html.slice(payStart,payEnd)+'\nthis.savePay=savePay;',ctx);
 (async () => {
   inputs['py-a'] = 'abc';
   await ctx.savePay('invoice1');
