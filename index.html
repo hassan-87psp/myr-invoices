@@ -3242,9 +3242,53 @@ async function doCancel(id){const reason=val('cx-r');if(!reason)return toast('En
 function adjModal(id,type='02'){const co=CO();const valid=co.invoices.filter(i=>['01','11'].includes(i.docType)&&i.lhdn.status==='Valid');
  modal('Credit / debit / refund note',`<div class="fg"><label class="f">Type</label><select id="aj-t">${opt([['02','Credit Note — reduce amount'],['03','Debit Note — increase amount'],['04','Refund Note — money returned']],type)}</select></div><div class="fg"><label class="f">Original validated document</label><select id="aj-o">${valid.length?opt(valid.map(i=>[i.id,i.number+' · '+(custOf(co,i)?.name||'')+' · '+money(calc(i).total)]),id):'<option value="">No validated invoices yet</option>'}</select></div><div class="fg"><label class="f">Reason</label><input id="aj-r" placeholder="e.g. Returned 2 units"></div><p class="muted sm">A draft is created with the original lines. Adjust quantities/amounts to the adjustment value, then check and submit.</p>`,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn p" ${valid.length?'':'disabled'} onclick="doAdj()">Create draft</button>`)}
 function doAdj(){const co=CO();const o=co.invoices.find(i=>i.id===val('aj-o'));if(!o)return;let t=val('aj-t');if(isSelfBilled(o))t=String(+t+10);const n=blankInvoice(co,t);Object.assign(n,{customerId:o.customerId,refInvoiceId:o.id,currency:o.currency,fxRate:o.fxRate,items:clone(o.items).map(x=>({...x,id:uuid()})),notes:val('aj-r')?('Reason: '+val('aj-r')):'',payTerms:''});n.number=(t==='02'||t==='12'?'CN-':t==='03'||t==='13'?'DN-':'RN-')+o.number;closeModal();PREFILL=n;go('#/app/invoices/new')}
-function payModal(id){if(!can('Edit Draft'))return toast('Your role cannot record payments.','err');const inv=CO().invoices.find(i=>i.id===id);if(!inv||inv.lhdn.status==='Cancelled')return toast('Cannot record payment for this invoice.','err');modal('Record payment — '+esc(inv.number),`<div class="grid g2">${field('py-a','Amount ('+inv.currency+')',(balance(inv)/100).toFixed(2),'text','inputmode="decimal"')}${field('py-d','Payment date',todayStr(),'date','max="'+todayStr()+'"')}<div class="fg"><label class="f">Method</label><select id="py-m">${opt(['Bank transfer','FPX','DuitNow','DuitNow QR','Card','Cash','Cheque'].map(x=>[x,x]))}</select></div>${field('py-r','Reference','','text','placeholder="Bank ref / receipt no."')}</div><p class="muted sm">Record only payments you have confirmed in your bank or gateway. A displayed QR does not prove payment.</p>`,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn p" onclick="savePay('${id}')">Save payment</button>`)}
-let PAYMENT_SAVING=false;
-async function savePay(id){if(PAYMENT_SAVING)return;if(!can('Edit Draft'))return toast('Your role cannot record payments.','err');const co=CO(),inv=co?.invoices.find(i=>i.id===id);if(!inv||inv.lhdn.status==='Cancelled')return toast('Cannot record payment on this invoice.','err');const raw=val('py-a').trim(),a=toSen(raw),date=val('py-d')||todayStr();if(!/^\d+(\.\d{1,2})?$/.test(raw)||!Number.isSafeInteger(a)||a<=0)return toast('Enter a positive amount with up to 2 decimals.','err');if(a>balance(inv))return toast('Amount exceeds the balance of '+money(balance(inv),inv.currency),'err');if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>todayStr())return toast('Payment date must be today or earlier.','err');PAYMENT_SAVING=true;try{inv.payments.push({id:uuid(),date,amount:a,method:val('py-m'),ref:val('py-r'),by:DB.session,at:new Date().toISOString()});tl(inv,'Payment recorded '+money(a,inv.currency));audit(co,'payment.record',inv.number+' '+money(a,inv.currency));save();if(CLOUD){clearTimeout(PUSH_T);PUSH_T=null;if(!(await cloudPush())){closeModal();toast('Payment is NOT confirmed saved in the cloud. Keep this tab open and use Retry save. Do not enter it twice.','err');rerender();return}}closeModal();toast('Payment recorded and saved');rerender()}finally{PAYMENT_SAVING=false}}
+function payModal(id){PAYMENT_PENDING_ID=null;if(!can('Edit Draft'))return toast('Your role cannot record payments.','err');const inv=CO().invoices.find(i=>i.id===id);if(!inv||inv.lhdn.status==='Cancelled')return toast('Cannot record payment for this invoice.','err');modal('Record payment — '+esc(inv.number),`<div class="grid g2">${field('py-a','Amount ('+inv.currency+')',(balance(inv)/100).toFixed(2),'text','inputmode="decimal"')}${field('py-d','Payment date',todayStr(),'date','max="'+todayStr()+'"')}<div class="fg"><label class="f">Method</label><select id="py-m">${opt(['Bank transfer','FPX','DuitNow','DuitNow QR','Card','Cash','Cheque'].map(x=>[x,x]))}</select></div>${field('py-r','Reference','','text','placeholder="Bank ref / receipt no."')}</div><p class="muted sm">Record only payments you have confirmed in your bank or gateway. A displayed QR does not prove payment.</p>`,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn p" onclick="savePay('${id}')">Save payment</button>`)}
+let PAYMENT_SAVING=false,PAYMENT_PENDING_ID=null;
+async function savePay(id){
+ if(PAYMENT_SAVING)return;
+ if(!can('Edit Draft'))return toast('Your role cannot record payments.','err');
+ const co=CO(),inv=co?.invoices.find(i=>i.id===id);
+ if(!inv||inv.lhdn.status==='Cancelled')return toast('Cannot record payment on this invoice.','err');
+ const raw=val('py-a').trim(),amount=toSen(raw),date=val('py-d')||todayStr();
+ if(!/^\d+(\.\d{1,2})?$/.test(raw)||!Number.isSafeInteger(amount)||amount<=0)
+  return toast('Enter a positive amount with up to 2 decimals.','err');
+ if(amount>balance(inv))return toast('Amount exceeds the balance of '+money(balance(inv),inv.currency),'err');
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>todayStr())
+  return toast('Payment date must be today or earlier.','err');
+ PAYMENT_SAVING=true;
+ try{
+  if(atomicEnabled()&&!(await atomicReady(co)))return;
+  if(!PAYMENT_PENDING_ID)PAYMENT_PENDING_ID=uuid();
+  const payment={id:PAYMENT_PENDING_ID,date,amount,method:val('py-m'),ref:val('py-r'),by:DB.session,at:new Date().toISOString()};
+  if(atomicEnabled()){
+   const before=coBody(co);
+   const {data,error}=await SB.rpc('atomic_add_payment',{
+    p_company_id:co.id,p_invoice_id:id,p_payment:payment
+   });
+   if(error||!data){
+    toast('Payment was not confirmed saved: '+(error?.message||'Unknown error')+'. Keep this form open.','err');
+    return;
+   }
+   if(!atomicApply(co,data,before))return;
+   PAYMENT_PENDING_ID=null;
+   closeModal();toast(data.existing?'Payment already recorded':'Payment recorded and saved');rerender();
+   return;
+  }
+  inv.payments.push(payment);tl(inv,'Payment recorded '+money(amount,inv.currency));
+  audit(co,'payment.record',inv.number+' '+money(amount,inv.currency));
+  save();
+  if(CLOUD){
+   clearTimeout(PUSH_T);PUSH_T=null;
+   if(!(await cloudPush())){
+    closeModal();
+    toast('Payment is NOT confirmed saved in cloud. Keep this tab open; do not record it twice.','err');
+    rerender();return;
+   }
+  }
+  PAYMENT_PENDING_ID=null;
+  closeModal();toast('Payment recorded and saved');rerender();
+ }finally{PAYMENT_SAVING=false}
+}
 function remind(id){if(!can('Edit Draft'))return toast('Your role cannot prepare payment reminders.','err');const co=CO();const inv=co.invoices.find(i=>i.id===id);const c=custOf(co,inv)||{};if(!c.email)return toast('Customer has no email address.','err');if(balance(inv)<=0)return toast('This invoice has no outstanding balance.','warn');const sub=`Payment reminder: ${inv.number} from ${co.name}`;const body=`Dear ${c.name},\n\nThis is a friendly reminder that invoice ${inv.number} dated ${fmtDate(inv.issueDate)} has an outstanding balance of ${money(balance(inv),inv.currency)}${inv.dueDate?`, due on ${fmtDate(inv.dueDate)}`:''}.\n\nIf you have already paid, please ignore this message or reply with the payment reference.\n\nThank you,\n${co.name}\n${co.phone||''}`;tl(inv,'Email reminder draft requested for '+c.email+' (delivery not verified)');save();toast('An email draft will open; sending is not confirmed.','warn');location.href=`mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`}
 function shareInv(id){const co=CO();if(co.demo)return toast('Demo workspaces cannot create public customer links.','warn');const inv=co.invoices.find(i=>i.id===id);if(!inv)return toast('Invoice not found.','err');if(!inv.share||new Date(inv.share.exp)<new Date())inv.share={token:rid(32),exp:addDays(todayStr(),30)};save();const url=location.origin+location.pathname+'#/v/'+inv.share.token;modal('Share with customer',`<p class="muted sm">A private link scoped to this single document. Expires ${fmtDate(inv.share.exp)}.</p><div class="row nw"><input id="sh-u" value="${esc(url)}" readonly><button class="btn" onclick="navigator.clipboard?.writeText(val('sh-u'));toast('Link copied')">Copy</button></div><div class="mt" style="text-align:center" class="qrwrap">${qrSvg(url,4)}</div><button class="btn sm d mt" onclick="CO().invoices.find(i=>i.id==='${id}').share=null;save();closeModal();toast('Link revoked')">Revoke link</button>`)}
 
