@@ -3189,6 +3189,51 @@ body:has(#bwrap) .toast{border-radius:12px;box-shadow:0 5px 20px #10234326}
 .ux-ref .ux-resource-panel>summary{padding:7px 9px;min-height:44px}
 .ux-ref .ux-plan-note{font-size:10px;line-height:1.35;margin-top:5px}
 }
+
+/* Stable native scrolling and tighter public landing for phones only. */
+@media screen and (max-width:767px){
+.site.ux-ref{overflow:visible!important;min-width:0}
+.ux-ref,.ux-ref *,.ux-ref *::before,.ux-ref *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important;will-change:auto!important}
+.ux-ref .ux-header{position:sticky;top:0;height:auto;backdrop-filter:none!important;box-shadow:0 1px 0 #dce8ff22!important;transform:none!important;translate:none!important}
+.ux-ref .ux-nav,.ux-ref .ux-nav-scrolled .ux-nav{height:46px!important}
+.ux-ref .ux-scroll-progress,.ux-ref .ux-motion-toggle,.ux-ref .ux-particles,.ux-ref .ux-cursor-glow,.ux-ref .ux-hero-rays,.ux-ref .ux-mesh,.ux-ref .ux-floor{display:none!important}
+.ux-ref .ux-hero .ux-copy,.ux-ref .ux-hero .ux-device,.ux-ref .ux-screen,.ux-ref .ux-flow .ux-city-upload,.ux-ref .ux-feature,.ux-ref .ux-price,.ux-ref .ux-step,.ux-ref .ux-reveal-run{translate:none!important;transform:none!important;opacity:1!important}
+.ux-ref .ux-hero{padding:8px 0 14px!important}
+.ux-ref .ux-hero-grid{gap:6px!important}
+.ux-ref .ux-pill{font-size:10px;padding:2px 7px 2px 3px}
+.ux-ref .ux-copy h1{font-size:clamp(22px,5.8vw,27px)!important;line-height:1.1;margin:5px 0!important}
+.ux-ref .ux-copy>p{font-size:12px!important;line-height:1.35;margin-bottom:6px}
+.ux-ref .ux-copy p.ux-small{font-size:10px!important;line-height:1.35;margin:4px auto 0}
+.ux-ref .ux-checks{margin-top:6px}
+.ux-ref .ux-copy .ux-btn{min-height:44px}
+.ux-ref .ux-device{max-width:270px!important}
+.ux-ref .lp-dashboard-head small,.ux-ref .lp-recent{display:none}
+.ux-ref .lp-mini-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+.ux-ref .lp-mini-kpis>div{display:flex;justify-content:space-between;align-items:center;gap:2px;min-width:0;padding:3px 4px!important}
+.ux-ref .lp-mini-kpis small{font-size:7px}
+.ux-ref .lp-mini-kpis b,.ux-ref .lp-mini-kpis b .ux-count{font-size:9px!important}
+.ux-ref .ux-trust{padding:6px;gap:4px}
+.ux-ref .ux-trust-wrap{margin-top:-7px}
+.ux-ref .ux-section{padding:6px 0!important;scroll-margin-top:52px}
+.ux-ref .ux-heading{margin-bottom:5px}
+.ux-ref .ux-heading h2{font-size:18px}
+.ux-ref .ux-feature{min-height:44px!important;padding:5px 6px!important;gap:4px!important}
+.ux-ref .ux-feature .ux-icon{width:22px;height:22px}
+.ux-ref .ux-feature h3{font-size:11.5px}
+.ux-ref .ux-feature p{font-size:11px}
+.ux-ref .ux-step{min-height:52px!important;padding:5px}
+.ux-ref .ux-flow{padding:7px}
+.ux-ref .ux-price{padding:8px!important;gap:3px 6px}
+.ux-ref .ux-price ul{gap:3px 6px;margin:3px 0 4px}
+.ux-ref .ux-price .ux-amount{font-size:20px}
+.ux-ref .ux-plans{gap:7px}
+.ux-ref .ux-benefits{gap:5px}
+.ux-ref .ux-audiences{gap:4px}
+.ux-ref .ux-audiences article{padding:5px 7px}
+.ux-ref .ux-faq details{margin:3px 0}
+.ux-ref .ux-faq summary{min-height:44px}
+.ux-ref .ux-footer{padding:7px 0}
+}
 </style>
 </head>
 <body>
@@ -3630,7 +3675,7 @@ function lpDemoStage(n){const root=document.querySelector('.ux-demo-live');if(!r
 function lpDemo(){const staticMotion=document.querySelector('.ux-ref')?.classList.contains('ux-motion-paused');modal('Explore MYR Invoice', '<div class="ux-demo-live '+(staticMotion?'ux-demo-static':'')+'" data-stage="0"><p class="ux-demo-note">Interactive demonstration • Sample data only. Nothing is sent to LHDN.</p><div class="ux-demo-tabs">'+['Create','Check','Submit','Result'].map((t,n)=>'<button type="button" data-stage="'+n+'" onclick="lpDemoStage('+n+')" aria-pressed="false">'+(n+1)+'. '+t+'</button>').join('')+'</div><div class="ux-demo-preview"><div class="ux-demo-icon"></div><h3 class="ux-demo-title"></h3><p class="ux-demo-desc"></p><div class="ux-demo-document"><div><b>DEMO-INV-001</b><small>Sample business</small></div><strong>RM 250.00</strong><span class="ux-demo-status"></span></div><div class="ux-demo-transfer"><span>MYR Invoice</span><i></i><span>MyInvois API</span></div></div><div class="ux-demo-controls"><button class="btn ux-demo-prev" type="button" onclick="lpDemoStage(Number(this.closest(\'.ux-demo-live\').dataset.stage)-1)">← Back</button><button class="btn p ux-demo-next" type="button" onclick="lpDemoStage((Number(this.closest(\'.ux-demo-live\').dataset.stage)+1)%4)">Next step →</button></div></div>','<button class="btn" onclick="sampleModal()">View sample invoice</button><a class="btn p" href="#/signup" onclick="closeModal()">Create free account</a>',true);lpDemoStage(0)}
 function lpPreview(tab){const p=document.querySelector('.ux-ref .lp-dashboard-main');if(!p)return;const data={Invoices:['Invoices','Sample invoice register',[['INV-1024','RM 2,450','Validated'],['INV-1023','RM 1,200','Pending'],['INV-1022','RM 850','Draft']]],Customers:['Customers','Sample customer directory',[['Demo Retail','3 invoices','Active'],['Demo Services','2 invoices','Active'],['Demo Trading','1 invoice','Active']]],Products:['Products & services','Sample product catalogue',[['Consulting','RM 250','Service'],['Office supplies','RM 85','Product'],['Maintenance','RM 150','Service']]],Payments:['Payments','Sample payment activity',[['INV-1024','RM 2,450','Paid'],['INV-1023','RM 1,200','Pending'],['INV-1022','RM 850','Unpaid']]],'E-Invoice centre':['E-Invoice centre','Illustrative MyInvois status',[['INV-1024','Official status','Validated'],['INV-1023','Official status','Processing'],['INV-1022','Local status','Draft']]]};const view=data[tab];const alt=p.querySelector('.ux-preview-alt');if(!alt)return;p.classList.toggle('ux-preview-open',!!view);p.querySelector('.lp-dashboard-head h2').textContent=view?view[0]:'Dashboard';p.querySelector('.lp-dashboard-head p').textContent=view?view[1]:'Welcome back! Here is your business overview.';alt.innerHTML=view?'<div class="ux-alt-title"><b>'+view[0]+'</b><span>Sample data</span></div>'+view[2].map(([name,amount,status])=>'<div class="ux-alt-row"><span>'+ic('file',13)+' '+name+'</span><b>'+amount+'</b><em>'+status+'</em></div>').join(''):'';document.querySelectorAll('.ux-ref [data-preview-tab]').forEach(btn=>{const active=btn.dataset.previewTab===tab;btn.classList.toggle('selected',active);btn.setAttribute('aria-pressed',String(active))});if(view&&!document.querySelector('.ux-ref')?.classList.contains('ux-motion-paused')&&!matchMedia('(prefers-reduced-motion: reduce)').matches)alt.animate?.([{opacity:.35,transform:'translateX(6px)'},{opacity:1,transform:'translateX(0)'}],{duration:280})}
 function lpScrollMotion(root,shouldPause){
- const desktop=matchMedia('(min-width:701px)');
+ const desktop=matchMedia('(min-width:768px)');
  const hero=root.querySelector('.ux-hero'),flow=root.querySelector('.ux-flow');
  let frame=0,paintFrame=0,target=0,current=0,last=0,active=false,destroyed=false;
  const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
@@ -3638,7 +3683,7 @@ function lpScrollMotion(root,shouldPause){
  const maxY=()=>Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
  const enabled=()=>!destroyed&&root.isConnected&&!shouldPause()&&desktop.matches&&!document.querySelector('#modal .mbk');
  function stop(){if(frame)cancelAnimationFrame(frame);frame=0;active=false;target=current=getY();last=0}
- function paint(){paintFrame=0;if(!root.isConnected)return;const off=shouldPause();const vh=window.innerHeight||1;
+ function paint(){paintFrame=0;if(!root.isConnected)return;const off=shouldPause()||!desktop.matches;const vh=window.innerHeight||1;
   if(hero){const r=hero.getBoundingClientRect();const p=off?0:clamp(-r.top/Math.max(r.height,1),0,1);hero.style.setProperty('--ux-scroll-p',String(p));hero.style.setProperty('--ux-scroll-shift',(p*56)+'px')}
   if(flow){const r=flow.getBoundingClientRect();const p=off?0:clamp((vh-r.top)/(vh+r.height),0,1);flow.style.setProperty('--ux-city-shift',((p-.5)*28)+'px')}
 
@@ -3652,10 +3697,24 @@ function lpScrollMotion(root,shouldPause){
  window.addEventListener('wheel',wheel,{passive:false});window.addEventListener('scroll',schedulePaint,{passive:true});window.addEventListener('resize',sync,{passive:true});window.addEventListener('touchstart',nativeInput,{passive:true});window.addEventListener('pointerdown',nativeInput,{passive:true});window.addEventListener('keydown',key);desktop.addEventListener?.('change',sync);schedulePaint();
  return {sync,destroy(){destroyed=true;stop();if(paintFrame)cancelAnimationFrame(paintFrame);window.removeEventListener('wheel',wheel);window.removeEventListener('scroll',schedulePaint);window.removeEventListener('resize',sync);window.removeEventListener('touchstart',nativeInput);window.removeEventListener('pointerdown',nativeInput);window.removeEventListener('keydown',key);desktop.removeEventListener?.('change',sync)}};
 }
+function lpMobileStatic(root,phone){
+ // Native scrolling only: no wheel interception, scroll-driven layout, reveal observers, or counters.
+ root.classList.add('ux-motion-paused');
+ root.classList.remove('ux-motion-on');
+ root.querySelectorAll('[data-lp-count]').forEach(el=>{const n=Number(el.dataset.lpCount);if(Number.isFinite(n))el.textContent=(el.dataset.lpPrefix||'')+n.toLocaleString('en-MY')});
+ root.querySelectorAll('[data-preview-tab]').forEach(btn=>btn.addEventListener('click',()=>lpPreview(btn.dataset.previewTab)));
+ const navClick=ev=>{const btn=ev.target.closest?.('button[onclick*="scrollToId"]');if(!btn||!root.contains(btn))return;const m=btn.getAttribute('onclick').match(/scrollToId\('([^']+)'\)/);if(!m)return;ev.preventDefault();ev.stopImmediatePropagation();btn.closest('details')?.removeAttribute('open');if(m[1]==='home')window.scrollTo({top:0,behavior:'instant'});else document.getElementById(m[1])?.scrollIntoView({behavior:'instant',block:'start'})};
+ root.addEventListener('click',navClick,true);
+ let cleanup;function dispose(){root.removeEventListener('click',navClick,true);phone.removeEventListener?.('change',changed);cleanup?.disconnect()}
+ function changed(){if(!phone.matches&&root.isConnected){dispose();root.classList.remove('ux-motion-paused');lpMotion()}}
+ phone.addEventListener?.('change',changed);
+ cleanup=new MutationObserver(()=>{if(!root.isConnected)dispose()});cleanup.observe(document.getElementById('app'),{childList:true});
+}
 function lpMotion(){
  const root=document.querySelector('.site.ux-ref');if(!root)return;
+ const phone=matchMedia('(max-width:767px)');if(phone.matches){lpMobileStatic(root,phone);return;}
  const media=matchMedia('(prefers-reduced-motion: reduce)');let preference=null;try{preference=sessionStorage.getItem('myr-landing-motion')}catch{}let paused=preference==='off'||(preference!=='on'&&media.matches);
- const hero=root.querySelector('.ux-hero');const toggle=root.querySelector('.ux-motion-toggle');const header=root.querySelector('.ux-header');const progress=root.querySelector('.ux-scroll-progress');let scrollFrame=0;function onScroll(){if(scrollFrame)return;scrollFrame=requestAnimationFrame(()=>{scrollFrame=0;if(!root.isConnected)return;const top=window.scrollY||document.documentElement.scrollTop;const max=Math.max(1,document.documentElement.scrollHeight-window.innerHeight);header?.classList.toggle('ux-nav-scrolled',top>45);progress?.style.setProperty('--ux-progress',Math.max(0,Math.min(1,top/max)));})}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll();
+ const hero=root.querySelector('.ux-hero');const toggle=root.querySelector('.ux-motion-toggle');const header=root.querySelector('.ux-header');const progress=root.querySelector('.ux-scroll-progress');let scrollFrame=0;function onScroll(){if(scrollFrame)return;scrollFrame=requestAnimationFrame(()=>{scrollFrame=0;if(!root.isConnected)return;if(phone.matches)return;const top=window.scrollY||document.documentElement.scrollTop;const max=Math.max(1,document.documentElement.scrollHeight-window.innerHeight);header?.classList.toggle('ux-nav-scrolled',top>45);progress?.style.setProperty('--ux-progress',Math.max(0,Math.min(1,top/max)));})}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll();
  function setMotion(){root.classList.toggle('ux-motion-paused',paused);root.classList.toggle('ux-motion-on',!paused);if(toggle){toggle.textContent=paused?'▶ Motion OFF — Enable':'Ⅱ Motion ON — Pause';toggle.setAttribute('aria-pressed',String(!paused))}}
  setMotion();const scrollMotion=lpScrollMotion(root,()=>paused);toggle?.addEventListener('click',()=>{paused=!paused;preference=paused?'off':'on';try{sessionStorage.setItem('myr-landing-motion',preference)}catch{}setMotion();scrollMotion.sync();if(!paused)runMetrics()});root.querySelectorAll('[data-preview-tab]').forEach(btn=>btn.addEventListener('click',()=>lpPreview(btn.dataset.previewTab)));
  root.querySelectorAll('button[onclick*="scrollToId"]').forEach(btn=>btn.addEventListener('click',ev=>{const m=btn.getAttribute('onclick').match(/scrollToId\('([^']+)'\)/);if(!m)return;scrollMotion.sync();ev.stopImmediatePropagation();btn.closest('details')?.removeAttribute('open');const behavior=paused?'auto':'smooth';if(m[1]==='home')window.scrollTo({top:0,behavior});else document.getElementById(m[1])?.scrollIntoView({behavior,block:'start'})},true));
