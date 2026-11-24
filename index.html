@@ -2696,6 +2696,13 @@ footer.ft{background:var(--navy);color:#B7C3D6;padding:56px 0 28px;margin-top:84
 @media(max-width:560px){.ux-ref .ux-hero.ux-in-view .ux-screen{animation:none}.ux-ref .ux-hero.ux-in-view .ux-qr-float{animation:ux-qr-mobile 3.6s ease-in-out infinite}@keyframes ux-qr-mobile{0%,100%{transform:rotate(5deg) translateY(0)}50%{transform:rotate(1deg) translateY(-9px)}}}
 .ux-ref.ux-motion-paused *, .ux-ref.ux-motion-paused *:before,.ux-ref.ux-motion-paused *:after{animation:none!important;transition:none!important}
 @media(prefers-reduced-motion:reduce){.ux-ref *, .ux-ref *:before,.ux-ref *:after{animation:none!important;transition:none!important}.ux-ref .ux-motion-toggle{display:none}}
+
+/* User-supplied KLCC cutout; fallback remains until asset is uploaded. */
+.ux-ref .ux-city-art-user{width:32%;mask-image:linear-gradient(90deg,transparent,#000 18%);-webkit-mask-image:linear-gradient(90deg,transparent,#000 18%)}
+.ux-ref .ux-city-upload{object-fit:contain;object-position:right bottom;filter:none;opacity:1;inset:0;width:100%;height:100%}
+.ux-ref .ux-has-upload .ux-skyline,.ux-ref .ux-has-upload .ux-city-art:after{display:none}
+@media(max-width:900px){.ux-ref .ux-city-art-user{width:48%;opacity:.27}}
+@media(max-width:560px){.ux-ref .ux-city-art-user{width:65%;opacity:.2}}
 </style>
 </head>
 <body>
@@ -3129,7 +3136,7 @@ function paint(html){if(html==null)return;$('#app').innerHTML=html;if(AFTER){con
 
 /* ================= Public website ================= */
 function lpSkylineFallback(){return '<svg viewBox="0 0 310 160" aria-hidden="true" class="ux-skyline"><defs><linearGradient id="ux-city" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#74b8f9"/><stop offset="1" stop-color="#244d9a"/></linearGradient><pattern id="ux-windows" width="6" height="8" patternUnits="userSpaceOnUse"><path d="M1 1h4v4H1z" fill="#d2ebff" opacity=".55"/></pattern></defs><path d="M0 160V132h14v-31h16v59H42V86h20v74h14v-45h16v45h16V71h23v89h20V105h21v55h20V88h22v72h14V62h20v98h13v-37h20v37h29z" fill="#6694cb" opacity=".45"/><g fill="url(#ux-city)" stroke="#c7e5ff" stroke-width=".9"><path d="M125 160V53h4V37h5V23h4V12h3V2h2v10h3v11h4v14h5v16h4v107z"/><path d="M172 160V53h4V37h5V23h4V12h3V2h2v10h3v11h4v14h5v16h4v107z"/><path d="M159 82h13v5h-13z"/><path d="M86 160V94h23v66zM220 160V75h24v85zM253 160V113h24v47z"/></g><g fill="url(#ux-windows)"><path d="M130 55h24v105h-24zM177 55h24v105h-24zM89 97h17v63H89zM223 79h18v81h-18zM256 116h18v44h-18z"/></g></svg>'}
-function lpSkyline(){return '<div class="ux-city-art" aria-hidden="true">'+lpSkylineFallback()+'<img class="ux-city-photo" src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Petronas_Twin_Towera_from_KLCC_Park.jpg/500px-Petronas_Twin_Towera_from_KLCC_Park.jpg" alt="" width="500" height="1111" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.hidden=true"></div><a class="ux-photo-credit" href="https://commons.wikimedia.org/wiki/File:Petronas_Twin_Towera_from_KLCC_Park.jpg" target="_blank" rel="noopener">Photo: Azreey / Wikimedia Commons · CC BY-SA 4.0 (cropped)</a>'}
+function lpSkyline(){return '<div class="ux-city-art ux-city-art-user" aria-hidden="true">'+lpSkylineFallback()+'<img class="ux-city-photo ux-city-upload" src="./klcc-skyline.webp" alt="" width="1000" height="800" loading="lazy" decoding="async" onerror="this.hidden=true" onload="this.closest(\' .ux-flow\'.trim()).classList.add(\'ux-has-upload\')"></div>'}
 function lpDemo(){const steps=[['file','Create an invoice','Add a customer, select products and review totals.'],['shield','Check compliance','Review missing information and suggested corrections.'],['plug','Submit to MyInvois','After company verification and LHDN authorization, submit for official processing.'],['qr','Share the result','Once officially validated, share the invoice PDF with its verification QR.']];modal('Explore MYR Invoice', '<div style="display:grid;gap:12px"><p class="muted">Interactive overview — no live invoice is submitted.</p>'+steps.map(([i,t,d],n)=>'<details class="card pad" '+(n===0?'open':'')+'><summary style="cursor:pointer;font-weight:700">'+(n+1)+'. '+t+'</summary><p class="muted mt8">'+d+'</p></details>').join('')+'</div>','<button class="btn" onclick="sampleModal()">View sample invoice</button><a class="btn p" href="#/signup" onclick="closeModal()">Create free account</a>',true)}
 function lpMotion(){
  const root=document.querySelector('.site.ux-ref');if(!root)return;
