@@ -3706,6 +3706,16 @@ body:has(#bwrap) .toast{border-radius:12px;box-shadow:0 5px 20px #10234326}
 }
 .myr-phone-quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .myr-phone-quick-grid :is(button,a){font-family:inherit;border:1px solid #dbe7f5;background:#f6f9ff;color:#194b9b;border-radius:10px;display:flex;align-items:center;gap:7px;min-height:48px;padding:8px;text-decoration:none;font-size:12px;cursor:pointer}
+
+/* Optional document-only styles, selected in phone preview. Classic remains unchanged. */
+@media screen and (max-width:767px){.myr-pdf-controls[hidden]{display:flex!important;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;padding:7px 9px;border:1px solid #dce7f5;border-radius:9px;background:#f4f8ff;color:#16365e;font-size:12px;font-weight:650}.myr-pdf-controls select{width:auto;max-width:60%;min-height:40px}}
+.doc.myr-pdf-modern>div.row:first-of-type{border-bottom:3px solid #1458d5;padding-bottom:10px}
+.doc.myr-pdf-modern h2,.doc.myr-pdf-modern .parties h4{color:#1458b2}
+.doc.myr-pdf-modern th{background:#e6efff;color:#123d7a}
+.doc.myr-pdf-modern .parties>div{border:1px solid #dbe5f2;border-radius:8px;padding:9px}
+.doc.myr-pdf-mono h2,.doc.myr-pdf-mono .parties h4{color:#202020}
+.doc.myr-pdf-mono th{background:#f0f0f0;color:#222;border-top:1px solid #444;border-bottom:1px solid #444}
+.doc.myr-pdf-mono .lhdn{border-color:#777;border-radius:0}
 </style>
 </head>
 <body>
@@ -4022,15 +4032,15 @@ function mergeOfficial(co,docs){const by={};docs.forEach(d=>by[d.invoice_id]=d);
  const m=monthKey(todayStr());co.usage={...(co.usage||{}),[m]:docs.filter(d=>d.accepted_at&&monthKey(new Date(new Date(d.accepted_at).getTime()+8*3600e3).toISOString())===m).length}}
 function mergeLinks(co,links){links.forEach(l=>{if(l.kind==='qr'){const r=co.requests.find(x=>x.id===l.ref_id);if(r&&l.data&&['Open','Received'].includes(r.status)){r.data=l.data;r.status='Received';r.submits=l.submits}}
  else{const inv=co.invoices.find(x=>x.id===l.ref_id);if(!inv)return;(l.data?.corrections||[]).forEach(c=>{inv.timeline=inv.timeline||[];if(!inv.timeline.some(t=>t.cid===c.id))inv.timeline.unshift({at:c.at,by:'buyer',cid:c.id,msg:'Buyer correction request ('+(c.email||'no email')+'): '+c.message})})}})}
-function portalSnapshot(co,inv){const cust=custOf(co,inv)||{};const ref=isAdj(inv)?co.invoices.find(i=>i.id===inv.refInvoiceId):null;const i2=clone(inv);delete i2.internal;delete i2.timeline;delete i2.share;delete i2.reminders;i2.lhdn={status:inv.lhdn.status,uuid:inv.lhdn.uuid,longId:inv.lhdn.longId,validatedAt:inv.lhdn.validatedAt};
+function portalSnapshot(co,inv){const cust=custOf(co,inv)||{};const ref=isAdj(inv)?co.invoices.find(i=>i.id===inv.refInvoiceId):null;const i2=clone(inv);delete i2.internal;delete i2.timeline;delete i2.share;delete i2.reminders;delete i2.createdBy;delete i2.createdAt;i2.payments=(inv.payments||[]).map(p=>({date:p.date,amount:p.amount,method:p.method}));i2.lhdn={status:inv.lhdn.status,uuid:inv.lhdn.uuid,longId:inv.lhdn.longId,validatedAt:inv.lhdn.validatedAt};
  return {invoice:i2,paid:paidOf(inv),company:{name:co.name,tin:co.tin,brn:co.brn,sst:co.sst,msic:co.msic,msicDesc:co.msicDesc,email:co.email,phone:co.phone,addr:co.addr,logo:co.logo,lhdn:{env:co.lhdn.env},customers:[cust],invoices:ref?[{id:ref.id,number:ref.number,lhdn:{uuid:ref.lhdn.uuid}}]:[]}}}
-async function syncLinks(co){if(co.demo){LINKS[co.id]=new Set();return}const want=[];
+async function syncLinks(co){if(co.demo){LINKS[co.id]=new Set();return true}const want=[];
  co.requests.forEach(r=>want.push({token:r.token,company_id:co.id,kind:'qr',ref_id:r.id,expires_at:r.expiresAt,closed:['Approved','Declined'].includes(r.status),meta:{label:r.label,receipt:r.receipt||'',state:r.status}}));
  co.invoices.forEach(inv=>{if(inv.share&&inv.share.token)want.push({token:inv.share.token,company_id:co.id,kind:'invoice',ref_id:inv.id,expires_at:inv.share.exp,closed:false,meta:portalSnapshot(co,inv)})});
- const changed=want.filter(w=>{const h=fnv(JSON.stringify(w));if(LINKH[w.token]===h)return false;LINKH[w.token]=h;return true});
- if(changed.length){const {error}=await SB.from('public_links').upsert(changed,{onConflict:'token'});if(error){changed.forEach(w=>delete LINKH[w.token]);toast('Link sync failed: '+error.message,'err')}}
+ const changed=want.filter(w=>{const h=fnv(JSON.stringify(w));return LINKH[w.token]!==h});
+ if(changed.length){const {error}=await SB.from('public_links').upsert(changed,{onConflict:'token'});if(error){changed.forEach(w=>delete LINKH[w.token]);toast('Link sync failed: '+error.message,'err');return false}changed.forEach(w=>LINKH[w.token]=fnv(JSON.stringify(w)))}
  const have=LINKS[co.id]||new Set();const keep=new Set(want.map(w=>w.token));const stale=[...have].filter(t=>!keep.has(t));
- if(stale.length)await SB.from('public_links').delete().in('token',stale);LINKS[co.id]=keep}
+ if(stale.length){const {error}=await SB.from('public_links').delete().eq('company_id',co.id).in('token',stale);if(error){toast('Could not revoke old links: '+error.message,'err');return false}stale.forEach(t=>delete LINKH[t])}LINKS[co.id]=keep;return true}
 let PUSHING=false;
 async function cloudPush(){
  PUSH_T=null;
@@ -4363,7 +4373,7 @@ function myrDraftKey(co){return DB.session&&co?.id?MYR_DRAFT_PREFIX+encodeURICom
 function myrDraftAllowed(co){return !!(co&&user()&&co.status!=='suspended'&&can('Create')&&matchMedia('(max-width:767px)').matches)}
 function myrDraftFields(inv){return {id:inv.id,docType:inv.docType,number:inv.number,autoNumber:inv._autoNumber,customerId:inv.customerId,issueDate:inv.issueDate,dueDate:inv.dueDate,currency:inv.currency,fxRate:inv.fxRate,payTerms:inv.payTerms,notes:inv.notes,internal:inv.internal,consolidated:!!inv.consolidated,refInvoiceId:inv.refInvoiceId,items:inv.items.map(x=>({id:x.id,desc:x.desc,classCode:x.classCode,unitCode:x.unitCode,qty:x.qty,price:x.price,discount:x.discount,taxType:x.taxType,taxRate:x.taxRate}))}}
 function myrDraftRead(co){const k=myrDraftKey(co);if(!k||!myrDraftAllowed(co))return null;try{const v=JSON.parse(sessionStorage.getItem(k)||'null');if(!v||!v.draft||!Number.isFinite(v.at)||Date.now()-v.at>12*3600e3||v.at>Date.now()+60000||!Array.isArray(v.draft.items)||!v.draft.items.length||v.draft.items.length>500||co.invoices.some(i=>i.id===v.draft.id)){sessionStorage.removeItem(k);return null}return v.draft}catch{return null}}
-function myrDraftRestore(co,d){if(!d||typeof d.id!=='string'||!DOC_TYPES[d.docType])return null;const n=blankInvoice(co,d.docType);const f=myrDraftFields(d);delete f.autoNumber;Object.assign(n,f);if(d.autoNumber&&d.number===d.autoNumber)n.number=co.prefix+co.nextNo;return n}
+function myrDraftRestore(co,d){if(!d||typeof d.id!=='string'||!Object.hasOwn(DOC_TYPES,d.docType)||!Array.isArray(d.items)||d.items.some(i=>!i||typeof i!=='object'))return null;const n=blankInvoice(co,d.docType);const f=myrDraftFields(d);delete f.autoNumber;Object.assign(n,f);if(d.autoNumber&&d.number===d.autoNumber)n.number=co.prefix+co.nextNo;return n}
 function myrDraftCapture(){const ctx=MYR_DRAFT_CONTEXT,co=CO();if(!ctx||!myrDraftAllowed(co)||ctx.key!==myrDraftKey(co)||ctx.id!==ED?.id||location.hash.split('?')[0]!=='#/app/invoices/new'||co.invoices.some(i=>i.id===ED.id))return;try{const draft=myrDraftFields(ED),body=JSON.stringify(draft);if(body===ctx.last)return;if(body.length>500000){const el=document.getElementById('myr-draft-status');if(el)el.textContent='Draft too large for tab recovery. Save manually.';return}sessionStorage.setItem(ctx.key,JSON.stringify({at:Date.now(),draft}));ctx.last=body;const el=document.getElementById('myr-draft-status');if(el)el.textContent='Draft recovered in this tab · not saved to cloud'}catch{const el=document.getElementById('myr-draft-status');if(el)el.textContent='Temporary recovery unavailable. Save manually.'}}
 function myrDraftClear(co,id){try{const k=myrDraftKey(co);if(!k)return;const v=JSON.parse(sessionStorage.getItem(k)||'null');if(!id||v?.draft?.id===id)sessionStorage.removeItem(k)}catch{}if(MYR_DRAFT_CONTEXT?.id===id||!id)MYR_DRAFT_CONTEXT=null}
 function myrDraftClearAll(){try{for(let i=sessionStorage.length-1;i>=0;i--){const k=sessionStorage.key(i);if(k?.startsWith(MYR_DRAFT_PREFIX))sessionStorage.removeItem(k)}}catch{}MYR_DRAFT_CONTEXT=null}
@@ -4527,7 +4537,10 @@ async function bSave(status){
   toast('Invoice save failed: '+(e?.message||String(e))+' — keep this tab open.','err');
  }finally{INVOICE_SAVING=false}
 }
-function bPreview(){modal('Preview — '+esc(ED.number),docHTML(ED,CO()),`<button class="btn" onclick="closeModal()">Close</button><button class="btn p" onclick="printDoc()">${ic('print',16)}Print / Save PDF</button>`,true)}
+function myrPdfControls(){return '<div hidden class="myr-pdf-controls"><label for="myr-pdf-style">PDF style</label><select id="myr-pdf-style" onchange="myrApplyPdfStyle(this.value)"><option value="classic">Classic</option><option value="modern">Modern blue</option><option value="mono">Minimal black</option></select></div>'}
+function myrApplyPdfStyle(style){const d=document.querySelector('#modal .doc');if(!d)return;d.classList.remove('myr-pdf-modern','myr-pdf-mono');if(['modern','mono'].includes(style))d.classList.add('myr-pdf-'+style)}
+function bPreview(){modal('Preview — '+esc(ED.number),myrPdfControls()+docHTML(ED,CO()),`<button class="btn" onclick="closeModal()">Close</button><button class="btn p" onclick="printDoc()">${ic('print',16)}Print / Save PDF</button>`,true)}
+function myrOpenInvoicePrint(id){const co=CO(),inv=co?.invoices.find(i=>i.id===id);if(!inv||!can('Download'))return toast('Not allowed to download this document.','err');modal(esc(inv.number),myrPdfControls()+docHTML(inv,co),'<button class="btn p" onclick="printDoc()">Print / Save PDF</button>',true)}
 
 /* ================= Document render ================= */
 function docHTML(inv,co,opts={}){const cust=(co.customers||[]).find(c=>c.id===inv.customerId)||{};const c=calc(inv);const sb=isSelfBilled(inv);const sup=sb?{...cust,msic:'',msicDesc:''}:co,buy=sb?co:cust;const st=s=>(STATES.find(x=>x[0]===s)||[])[1]||'';const cur=inv.currency||'MYR';
@@ -4561,7 +4574,7 @@ function vInvoiceView(id){const co=CO();const inv=co.invoices.find(i=>i.id===id)
  ${st==='Submitted'?`<div class="note mb">Accepted for processing — LHDN has not finished validation. This is not a validation result yet. Status is checked automatically; use Refresh status anytime.</div>`:''}
  ${inv.appStatus==='Submission Queued'&&!LHDN.base(co)?`<div class="note w mb">Queued but <b>nothing has been sent to LHDN</b> — the LHDN backend is not connected. <a href="#/app/integrations">Connect now</a>.</div>`:''}
  ${inv.lhdn.lastError&&!['Valid','Submitted'].includes(st)?`<div class="note e mb"><b>Last attempt failed (${esc(inv.lhdn.lastError.kind)}):</b> ${esc(inv.lhdn.lastError.message)}</div>`:''}
- <div class="bgrid"><div><div class="card pad"><div class="row sb mb"><h3>Document</h3><div class="row"><button class="btn sm" onclick="modal('${esc(inv.number)}',docHTML(CO().invoices.find(i=>i.id==='${id}'),CO()),'<button class=&quot;btn p&quot; onclick=&quot;printDoc()&quot;>Print / Save PDF</button>',true)">${ic('print',14)}Print / PDF</button><button class="btn sm" onclick="dlJSON('${id}')">${ic('dl',14)}UBL JSON</button><button class="btn sm" onclick="dupInvoice('${id}')">Duplicate</button>${st==='Not Submitted'&&!inv.lhdn.attempts.length&&can('Edit Draft')?`<button class="btn sm d" onclick="delInvoice('${id}')">Delete</button>`:''}</div></div>${docHTML(inv,co)}</div>
+ <div class="bgrid"><div><div class="card pad"><div class="row sb mb"><h3>Document</h3><div class="row"><button class="btn sm" data-invoice="${esc(id)}" onclick="myrOpenInvoicePrint(this.dataset.invoice)">${ic('print',14)}Print / PDF</button>',true)">${ic('print',14)}Print / PDF</button><button class="btn sm" onclick="dlJSON('${id}')">${ic('dl',14)}UBL JSON</button><button class="btn sm" onclick="dupInvoice('${id}')">Duplicate</button>${st==='Not Submitted'&&!inv.lhdn.attempts.length&&can('Edit Draft')?`<button class="btn sm d" onclick="delInvoice('${id}')">Delete</button>`:''}</div></div>${docHTML(inv,co)}</div>
  ${inv.lhdn.errors.length?`<div class="card pad mt"><h3 class="mb">Official validation errors</h3>${inv.lhdn.errors.map(e=>{const x=explainErr(e);return `<div class="iss"><b>${esc(x.title)}</b><div class="m">${esc(x.reason)}</div><div class="a">→ ${esc(x.fix)}</div><div class="muted mono mt8">${esc([e.code,e.step,e.path].filter(Boolean).join(' · '))}: ${esc(e.message)}</div></div>`}).join('')}</div>`:''}</div>
  <aside class="bside"><div class="card pad"><h3 class="mb8">LHDN record</h3><dl class="kv"><dt>Environment</dt><dd>${esc(inv.lhdn.attempts.at(-1)?.env||co.lhdn.env)}</dd><dt>Submission UID</dt><dd class="mono">${esc(inv.lhdn.submissionUid||'—')}</dd><dt>Document UUID</dt><dd class="mono">${esc(inv.lhdn.uuid||'—')}</dd><dt>Long ID</dt><dd class="mono">${esc(inv.lhdn.longId||'—')}</dd><dt>Validated</dt><dd>${fmtDT(inv.lhdn.validatedAt)}</dd><dt>Attempts</dt><dd>${inv.lhdn.attempts.length}</dd></dl>${vurl?`<a class="btn sm mt" href="${esc(vurl)}" target="_blank" rel="noopener">${ic('link',14)}Official verification page</a>`:''}
  ${st==='Valid'?`<div class="note ${hl>0?(hl<24?'w':''):'e'} mt sm">${ic('clock',14)} ${hl>0?`Cancellation window: <b>${Math.floor(hl)}h ${Math.floor((hl%1)*60)}m</b> left (until ${fmtDT(cancelDeadline(inv))}). Buyer rejection requests also fall in this window.`:'Cancellation window has closed. Use a credit, debit or refund note for changes.'}</div>`:''}</div>
@@ -4628,7 +4641,27 @@ async function savePay(id){
  }finally{PAYMENT_SAVING=false}
 }
 function remind(id){if(!can('Edit Draft'))return toast('Your role cannot prepare payment reminders.','err');const co=CO();const inv=co.invoices.find(i=>i.id===id);const c=custOf(co,inv)||{};if(!c.email)return toast('Customer has no email address.','err');if(balance(inv)<=0)return toast('This invoice has no outstanding balance.','warn');const sub=`Payment reminder: ${inv.number} from ${co.name}`;const body=`Dear ${c.name},\n\nThis is a friendly reminder that invoice ${inv.number} dated ${fmtDate(inv.issueDate)} has an outstanding balance of ${money(balance(inv),inv.currency)}${inv.dueDate?`, due on ${fmtDate(inv.dueDate)}`:''}.\n\nIf you have already paid, please ignore this message or reply with the payment reference.\n\nThank you,\n${co.name}\n${co.phone||''}`;tl(inv,'Email reminder draft requested for '+c.email+' (delivery not verified)');save();toast('An email draft will open; sending is not confirmed.','warn');location.href=`mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`}
-function shareInv(id){const co=CO();if(co.demo)return toast('Demo workspaces cannot create public customer links.','warn');const inv=co.invoices.find(i=>i.id===id);if(!inv)return toast('Invoice not found.','err');if(!inv.share||new Date(inv.share.exp)<new Date())inv.share={token:rid(32),exp:addDays(todayStr(),30)};save();const url=location.origin+location.pathname+'#/v/'+inv.share.token;modal('Share with customer',`<p class="muted sm">A private link scoped to this single document. Expires ${fmtDate(inv.share.exp)}.</p><div class="row nw"><input id="sh-u" value="${esc(url)}" readonly><button class="btn" onclick="navigator.clipboard?.writeText(val('sh-u'));toast('Link copied')">Copy</button></div><div class="mt" style="text-align:center" class="qrwrap">${qrSvg(url,4)}</div><button class="btn sm d mt" onclick="CO().invoices.find(i=>i.id==='${id}').share=null;save();closeModal();toast('Link revoked')">Revoke link</button>`)}
+
+let MYR_SHARE_BUSY=false;
+async function myrLinkConfirmed(token,id){const {data,error}=await SB.rpc('get_public_link',{p_token:token});if(error)throw error;return !!(data&&data.kind==='invoice'&&!data.closed&&data.meta?.invoice?.id===id&&String(data.expires_at||'').slice(0,10)>=todayStr())}
+async function shareInv(id){
+ const co=CO(),inv=co?.invoices.find(i=>i.id===id);
+ if(!CLOUD||!SB||!co||co.demo)return toast('Public links require a live cloud company.','warn');
+ if(!inv||!can('Edit Draft')||co.status==='suspended'||inv.lhdn.status==='Cancelled')return toast('Sharing is not available for this invoice.','err');
+ if(MYR_SHARE_BUSY)return;MYR_SHARE_BUSY=true;
+ try{
+  if(!inv.share?.token||String(inv.share.exp)<todayStr()){inv.share={token:rid(32),exp:addDays(todayStr(),30)};save()}
+  clearTimeout(PUSH_T);PUSH_T=null;if(!(await cloudPush()))return toast('Invoice link not saved yet. Retry after cloud sync.','err');
+  if(!(await syncLinks(co)))return;
+  const token=inv.share.token;if(!(await myrLinkConfirmed(token,id)))return toast('Could not verify the customer link. Nothing was shared.','err');
+  if(CO()?.id!==co.id)return;
+  const url=location.origin+location.pathname+'#/v/'+token;
+  const wa='https://wa.me/?text='+encodeURIComponent('Your invoice is available here: '+url);
+  modal('Share with customer','<p class="muted sm">Anyone with this private link can view this invoice until '+esc(fmtDate(inv.share.exp))+'. Send it only to the intended customer.</p><div class="row nw"><input id="sh-u" value="'+esc(url)+'" readonly><button class="btn" onclick="myrCopyLink()">Copy</button></div><div class="mt" style="text-align:center">'+qrSvg(url,4)+'</div><div class="row mt"><a class="btn p" href="'+esc(wa)+'" target="_blank" rel="noopener noreferrer">Share via WhatsApp</a><button class="btn d" data-share-id="'+esc(id)+'" onclick="myrRevokeShare(this.dataset.shareId)">Revoke link</button></div>');
+ }catch(e){toast('Could not verify invoice link: '+(e.message||String(e)),'err')}finally{MYR_SHARE_BUSY=false}
+}
+async function myrCopyLink(){const el=document.getElementById('sh-u');if(!el)return;try{await navigator.clipboard.writeText(el.value);toast('Link copied')}catch{el.focus();el.select();toast('Select and copy the link manually.','warn')}}
+function myrRevokeShare(id){const co=CO(),inv=co?.invoices.find(i=>i.id===id),token=inv?.share?.token;if(!token||!can('Edit Draft')||co.status==='suspended')return;confirmBox('Revoke customer link?','Anyone with the existing link will lose access.','Revoke',async()=>{if(CO()?.id!==co.id||!can('Edit Draft')||inv.share?.token!==token)return;try{inv.share=null;save();clearTimeout(PUSH_T);PUSH_T=null;if(!(await cloudPush())||!(await syncLinks(co)))return toast('Revocation not confirmed. Retry cloud sync.','err');const {data,error}=await SB.rpc('get_public_link',{p_token:token});if(error||data&&!data.closed)return toast('Revocation could not be verified.','err');toast('Link revoked')}catch(e){toast('Revocation not confirmed: '+e.message,'err')}},true)}
 
 /* ================= E-Invoice Centre ================= */
 function vEInvoice(p){const co=CO();const t=p[0]||'';const inv=co.invoices;
@@ -5030,7 +5063,7 @@ async function adminSet(id,status,plan){if(CLOUD){const {error}=await SB.rpc('ad
 /* Installable PWA. No service-worker caching of company data or authenticated requests. */
 let MYR_INSTALL_EVENT=null;
 const myrStandalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
-function myrPwaState(){document.querySelectorAll('.myr-pwa-install').forEach(b=>{b.classList.toggle('installed',myrStandalone());const t=b.querySelector('span');if(t)t.textContent=myrStandalone()?'App installed':'App Download'})}
+function myrPwaState(){document.querySelectorAll('.myr-pwa-install:not(.myr-phone-quick-link)').forEach(b=>{b.classList.toggle('installed',myrStandalone());const t=b.querySelector('span');if(t)t.textContent=myrStandalone()?'App installed':'App Download'})}
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();MYR_INSTALL_EVENT=e;myrPwaState()});
 window.addEventListener('appinstalled',()=>{MYR_INSTALL_EVENT=null;myrPwaState();toast('MYR Invoice installed')});
 async function myrInstallApp(){
