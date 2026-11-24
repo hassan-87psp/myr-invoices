@@ -3403,6 +3403,166 @@ body:has(#bwrap) .toast{border-radius:12px;box-shadow:0 5px 20px #10234326}
 .ux-ref .ux-footer-bottom{border-color:#ffffff1c;color:#bbcce2}
 .ux-ref :is(a,button,summary):focus-visible{outline:2px solid #55a8ff;outline-offset:2px}
 }
+
+/* Logged-in mobile workspace only. Desktop, tablet, portal and landing styles remain separate. */
+@media screen and (max-width:767px){
+.myr-business{--ma-bg:#f3f6fb;--ma-card:#fff;--ma-ink:#102442;--ma-muted:#536a88;--ma-line:#dfe7f2;--ma-blue:#125be4;--ma-tint:#eaf2ff;min-width:0;background:var(--ma-bg);min-height:100dvh}
+.myr-business.myr-dark{--ma-bg:#0d1c36;--ma-card:#152743;--ma-ink:#e6efff;--ma-muted:#b0c3e1;--ma-line:#2a4063;--ma-blue:#8ebaff;--ma-tint:#203a60}
+.myr-business .main{margin:0;width:100%;min-width:0;background:var(--ma-bg);min-height:100dvh;color:var(--ma-ink)}
+.myr-business .top{height:54px!important;padding:0 8px;gap:5px;backdrop-filter:none;background:var(--ma-card);border-color:var(--ma-line);z-index:40}
+.myr-business .top .menu-btn{width:40px;height:44px;flex:none;padding:0;justify-content:center;color:var(--ma-ink);border:0}
+.myr-business .top .cosel{min-width:0;width:0;max-width:none;flex:1;height:36px;padding:0 8px;font-size:12px;border-radius:9px;box-shadow:none;background:var(--ma-tint);color:var(--ma-ink);border:1px solid var(--ma-line);text-overflow:ellipsis}
+.myr-business .top .myr-global-search{flex:none;width:38px;height:40px;border-radius:9px;justify-content:center;padding:0;background:var(--ma-tint);border:0}
+.myr-business .top .myr-global-search span,.myr-business .top .myr-global-search kbd,.myr-business .top>div[style="flex:1"],.myr-business #myr-theme-toggle{display:none}
+.myr-business .top .myr-top-icon{width:38px;height:44px;flex:none;padding:0;color:var(--ma-ink)}
+.myr-business .myr-top-profile{flex:none}
+.myr-business .myr-top-profile summary{min-height:44px;gap:2px}
+.myr-business .top .avatar{width:29px;height:29px;font-size:12px}
+.myr-business .myr-phone-theme[hidden]{display:block!important;width:100%;text-align:left}
+.myr-business .content{padding:10px 9px calc(78px + env(safe-area-inset-bottom,0px));max-width:100%;width:100%;min-width:0;overflow-wrap:anywhere}
+.myr-business .side{width:min(84vw,300px);overflow-y:auto;overscroll-behavior:contain;border-radius:0 16px 16px 0;z-index:60}
+.myr-business .side .nav a{min-height:44px}
+.myr-business .side .brand{padding:14px}
+.myr-business .side.open+.scrim{z-index:55}
+.myr-business .myr-phone-nav[hidden]{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr));align-items:center;gap:2px;position:fixed;left:0;right:0;bottom:0;z-index:45;background:var(--ma-card);border-top:1px solid var(--ma-line);padding:4px 6px calc(4px + env(safe-area-inset-bottom,0px));box-shadow:0 -3px 14px #0f284c0d}
+.myr-business .myr-phone-tab{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:48px;min-width:0;border-radius:9px;color:var(--ma-muted);font-family:inherit;font-size:10px;font-weight:650;text-decoration:none;cursor:pointer}
+.myr-business .myr-phone-tab svg{flex:none}
+.myr-business .myr-phone-tab.active{color:var(--ma-blue);background:var(--ma-tint)}
+.myr-business .myr-phone-tab.primary{background:linear-gradient(135deg,#1673f5,#1251d7);color:#fff;box-shadow:0 2px 7px #0753ed25}
+.myr-business .myr-phone-tab.primary.active{background:#164cbb}
+.myr-business .myr-phone-tab:focus-visible{outline:2px solid #5aa5ff;outline-offset:1px}
+.myr-business .localbar{font-size:11px;padding:6px 9px;line-height:1.4}
+.myr-business .content .ph{display:flex;flex-direction:column;gap:6px;margin-bottom:9px;align-items:flex-start}
+.myr-business .content .ph h1{font-size:22px;line-height:1.15;letter-spacing:-.45px;color:var(--ma-ink)}
+.myr-business .content .ph p{font-size:11px;line-height:1.4;margin:3px 0 0;color:var(--ma-muted)}
+.myr-business .content .ph>.row{width:100%;gap:5px;flex-wrap:wrap}
+.myr-business .content .ph>.row:empty{display:none}
+.myr-business .content .ph .btn{flex:1;min-height:40px;min-width:0;font-size:11px;padding:0 8px;white-space:normal}
+.myr-business .content .card{border-color:var(--ma-line);border-radius:12px;box-shadow:0 1px 5px #173c7509;min-width:0}
+.myr-business .content .ch{padding:9px;gap:6px;flex-wrap:wrap}
+.myr-business .content .ch h3{font-size:13px}
+.myr-business .content .ch input{max-width:none!important;min-height:40px}
+.myr-business .content .pad{padding:9px}
+.myr-business .content .grid{gap:7px}
+.myr-business .content .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+.myr-business .content .kpi{padding:10px;min-width:0}
+.myr-business .content .kpi .v{font-size:17px;overflow-wrap:anywhere}
+.myr-business .content .pills,.myr-business .content .tabs{display:flex;flex-wrap:nowrap;max-width:100%;overflow-x:auto;scrollbar-width:none;gap:4px}
+.myr-business .content .pills button,.myr-business .content .tabs a{flex:none;font-size:11px;white-space:nowrap;min-height:40px}
+.myr-business .content .tabs a{display:flex;align-items:center;padding:7px 9px}
+.myr-business .content .tw{max-width:100%;overflow-x:auto}
+.myr-business .content input:not([type=checkbox]):not([type=radio]):not([type=file]),.myr-business .content select,.myr-business .content textarea{font-size:14px;max-width:100%;border-radius:8px}
+.myr-business .myr-ref-dashboard{gap:8px}
+.myr-business .myr-ref-banner{padding:12px;gap:8px;border-radius:13px}
+.myr-business .myr-ref-welcome h1{font-size:20px;line-height:1.2}
+.myr-business .myr-ref-welcome p{font-size:11px}
+.myr-business .myr-ref-banner-right{gap:5px}
+.myr-business .myr-ref-country{display:none}
+.myr-business .myr-ref-actions{gap:5px;width:100%}
+.myr-business .myr-ref-actions .btn{font-size:10px;min-height:40px;flex:1;padding:0 5px;white-space:normal}
+.myr-business .myr-ref-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.myr-business .myr-ref-kpi{padding:9px 7px 12px;min-height:78px;gap:6px;border-radius:10px}
+.myr-business .myr-kpi-icon{width:27px;height:27px;border-radius:8px}
+.myr-business .myr-kpi-icon svg{width:16px;height:16px}
+.myr-business .myr-kpi-copy h3{font-size:10px;line-height:1.2;margin:0 0 3px}
+.myr-business .myr-kpi-copy strong{font-size:clamp(14px,4vw,19px);letter-spacing:-.3px}
+.myr-business .myr-kpi-copy p{font-size:9px;margin:3px 0 0;line-height:1.3}
+.myr-business .myr-spark{height:18px;opacity:.5}
+.myr-business .myr-ref-middle,.myr-business .myr-ref-bottom,.myr-business .myr-ref-extras{grid-template-columns:1fr;gap:7px}
+.myr-business .myr-ref-chart{grid-column:auto}
+.myr-business .myr-status-body{min-height:120px;padding:8px}
+.myr-business .myr-real-donut{width:100px}
+.myr-business .myr-phone-invoice-table{display:none}
+.myr-business .myr-phone-invoice-list[hidden]{display:grid!important}
+.myr-business .myr-phone-invoice{display:flex;align-items:flex-start;gap:7px;padding:10px 9px;min-width:0;color:var(--ma-ink);border-bottom:1px solid var(--ma-line);text-decoration:none}
+.myr-business .myr-phone-invoice:last-child{border-bottom:0}
+.myr-business .myr-phone-doc-icon{width:31px;height:31px;border-radius:9px;background:var(--ma-tint);color:var(--ma-blue);display:grid;place-items:center;flex:none}
+.myr-business .myr-phone-doc-copy{display:grid;gap:2px;flex:1;min-width:0}
+.myr-business .myr-phone-doc-copy b,.myr-business .myr-phone-doc-right>b{font-size:12px;font-weight:750;overflow-wrap:anywhere}
+.myr-business .myr-phone-doc-copy span{font-size:11px;color:var(--ma-muted)}
+.myr-business .myr-phone-doc-copy small{font-size:10px;color:var(--ma-muted)}
+.myr-business .myr-phone-doc-right{display:grid;justify-items:end;gap:3px;text-align:right;max-width:45%;min-width:0}
+.myr-business .myr-phone-doc-right>div{display:flex;flex-wrap:wrap;gap:3px;justify-content:flex-end}
+.myr-business .myr-phone-doc-right .badge{font-size:9px;white-space:normal;padding:2px 4px}
+.myr-business :is(.myr-phone-contacts,.myr-phone-products) .t{display:block;width:100%;min-width:0}
+.myr-business :is(.myr-phone-contacts,.myr-phone-products) .t thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.myr-business :is(.myr-phone-contacts,.myr-phone-products) .t tbody{display:grid;gap:6px;padding:7px}
+.myr-business :is(.myr-phone-contacts,.myr-phone-products) .t tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 7px;padding:9px;border:1px solid var(--ma-line);border-radius:9px;background:var(--ma-card)}
+.myr-business :is(.myr-phone-contacts,.myr-phone-products) .t td{display:block;padding:0;border:0;font-size:11px;text-align:left;min-width:0;white-space:normal;overflow-wrap:anywhere;color:var(--ma-muted)}
+.myr-business :is(.myr-phone-contacts,.myr-phone-products) .t td:first-child{grid-column:1/-1;color:var(--ma-ink);font-size:13px}
+.myr-business :is(.myr-phone-contacts,.myr-phone-products) .t td:last-child{grid-column:1/-1;display:flex;justify-content:flex-end;gap:5px;padding-top:4px}
+.myr-business :is(.myr-phone-contacts,.myr-phone-products) .t td:last-child .btn{min-height:40px;font-size:11px}
+.myr-business .myr-phone-contacts td:nth-child(2):before{content:"TIN: "}
+.myr-business .myr-phone-contacts td:nth-child(5):before{content:"Outstanding: "}
+.myr-business .myr-phone-products td:nth-child(3):before{content:"Unit: "}
+.myr-business .myr-phone-products td:nth-child(4):before{content:"Price: "}
+.myr-business .myr-phone-products td:nth-child(5):before{content:"Tax: "}
+.myr-business #bwrap{min-width:0}
+.myr-business #bwrap .myr-simple-header{display:grid;gap:5px;padding:2px 1px 7px}
+.myr-business #bwrap .myr-simple-heading{gap:7px}
+.myr-business #bwrap .myr-simple-icon{width:32px;height:32px;border-radius:9px;background:var(--ma-tint);color:var(--ma-blue)}
+.myr-business #bwrap .myr-simple-icon svg{width:19px;height:19px}
+.myr-business #bwrap .myr-simple-heading h1{font-size:21px;font-weight:760;line-height:1.15}
+.myr-business #bwrap .myr-simple-heading p{font-size:11px;line-height:1.3;margin:2px 0 0}
+.myr-business #bwrap .myr-simple-status{display:flex;justify-content:space-between;align-items:center;gap:5px;text-align:left;flex-wrap:wrap;padding:0 0 1px}
+.myr-business #bwrap .myr-simple-status small{font-size:10px}
+.myr-business #bwrap .myr-simple-status .badge{font-size:9px;padding:3px 5px}
+.myr-business #bwrap .myr-simple-grid{grid-template-columns:minmax(0,1fr);gap:8px}
+.myr-business #bwrap .myr-simple-fields{gap:7px}
+.myr-business #bwrap .myr-simple-card{padding:9px;border-radius:11px}
+.myr-business #bwrap .myr-simple-section-heading{gap:6px;margin-bottom:7px}
+.myr-business #bwrap .myr-simple-step{min-width:26px;height:26px;border-radius:7px;font-size:11px}
+.myr-business #bwrap .myr-simple-section-heading h2{font-size:14px;line-height:1.2;font-weight:740;letter-spacing:-.2px}
+.myr-business #bwrap .myr-simple-section-heading p{font-size:10px;line-height:1.25;margin:2px 0 0}
+.myr-business #bwrap .myr-simple-section-art{display:none}
+.myr-business #bwrap .myr-simple-card .f{font-size:11px;margin-bottom:3px}
+.myr-business #bwrap .myr-simple-card .fg{margin:0 0 3px;min-width:0}
+.myr-business #bwrap .myr-simple-card input:not([type=checkbox]),.myr-business #bwrap .myr-simple-card select{height:40px;min-height:40px;font-size:13px;padding:0 7px;border-radius:8px;min-width:0}
+.myr-business #bwrap #inv-customer .fg .row.nw{display:flex;gap:4px}
+.myr-business #bwrap #inv-customer select[data-f=customer]{flex:1;width:0;min-width:0;text-overflow:ellipsis}
+.myr-business #bwrap .myr-inv-find,.myr-business #bwrap .myr-inv-new-customer{height:40px;flex:none;font-size:10px;padding:0 6px;gap:3px}
+.myr-business #bwrap .myr-inv-find{width:40px;padding:0;justify-content:center}
+.myr-business #bwrap .myr-inv-new-customer span{font-size:10px}
+.myr-business #bwrap .myr-simple-dates{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.myr-business #bwrap #inv-items .myr-simple-items-heading{gap:5px;margin-bottom:6px}
+.myr-business #bwrap #inv-items .myr-simple-items-heading .myr-simple-section-heading{flex:1 1 100%;min-width:0;margin:0}
+.myr-business #bwrap .myr-simple-product-action{margin:0!important;width:100%;display:flex;justify-content:flex-end}
+.myr-business #bwrap .myr-simple-product-action .btn{min-height:38px;font-size:11px;padding:0 8px}
+.myr-business #bwrap .myr-dense-table{max-height:none;overflow:visible;border:0;display:grid;gap:5px}
+.myr-business #bwrap .myr-dense-table .myr-simple-table-head{display:none}
+.myr-business #bwrap .myr-dense-table .myr-simple-item{padding:7px;border:1px solid var(--ma-line);border-radius:9px;background:var(--ma-card)}
+.myr-business #bwrap .myr-dense-table .myr-simple-item:nth-child(odd){background:var(--ma-card)}
+.myr-business #bwrap .myr-dense-table .myr-simple-item-row{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.1fr) minmax(0,1fr);gap:4px 6px;align-items:end}
+.myr-business #bwrap .myr-dense-table .myr-simple-item-row>div{min-width:0}
+.myr-business #bwrap .myr-dense-table .myr-simple-row-no{grid-column:1;grid-row:1;align-self:center;font-size:11px;color:var(--ma-muted)}
+.myr-business #bwrap .myr-dense-table .myr-simple-row-no:before{content:"Item "}
+.myr-business #bwrap .myr-dense-table .myr-simple-row-tools{grid-column:2/4;grid-row:1;justify-content:flex-end;gap:3px}
+.myr-business #bwrap .myr-dense-table .myr-simple-row-tools .btn{width:38px;height:38px;min-height:38px;border-radius:7px;background:var(--ma-tint);color:var(--ma-blue);padding:0}
+.myr-business #bwrap .myr-dense-table .myr-simple-row-tools .btn.d{color:#dc2626}
+.myr-business #bwrap .myr-dense-table .myr-simple-description{grid-column:1/-1;grid-row:2}
+.myr-business #bwrap .myr-dense-table .myr-simple-item-row>div:nth-child(3){grid-column:1;grid-row:3}
+.myr-business #bwrap .myr-dense-table .myr-simple-item-row>div:nth-child(4){grid-column:2;grid-row:3}
+.myr-business #bwrap .myr-dense-table .myr-simple-item-row>div:nth-child(5){grid-column:3;grid-row:3}
+.myr-business #bwrap .myr-dense-table .myr-simple-item-row .f{position:static;width:auto;height:auto;clip-path:none;white-space:normal;margin:0 0 3px;font-size:10px}
+.myr-business #bwrap .myr-dense-table .myr-simple-item-row input{height:40px;min-height:40px;font-size:13px;width:100%;min-width:0}
+.myr-business #bwrap .myr-dense-table .myr-inv-line-total{height:auto;min-height:40px;justify-content:flex-start;align-items:center;padding:0 3px;font-size:12px;overflow-wrap:anywhere}
+.myr-business #bwrap .myr-dense-table .myr-simple-line-details{margin:0}
+.myr-business #bwrap .myr-dense-table .myr-simple-line-details[open]{margin-top:5px}
+.myr-business #bwrap .myr-simple-advanced-grid{grid-template-columns:repeat(2,minmax(0,1fr));padding:6px;gap:5px}
+.myr-business #bwrap .myr-simple-add{min-height:42px;margin-top:6px;font-size:12px}
+.myr-business #bwrap #inv-details .myr-simple-options{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
+.myr-business #bwrap #inv-details .myr-simple-options button{min-height:40px;padding:5px 6px}
+.myr-business #bwrap .myr-simple-grid .myr-inv-side{gap:7px;position:static}
+.myr-business #bwrap .myr-simple-grid .myr-inv-summary header{padding:9px}
+.myr-business #bwrap .myr-simple-grid #btot{padding:7px 9px}
+.myr-business #bwrap .myr-simple-grid .tot.big{padding:8px;margin-top:5px}
+.myr-business #bwrap .myr-inv-save-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px!important}
+.myr-business #bwrap .myr-inv-save-grid>.btn.p,.myr-business #bwrap .myr-inv-save-grid>a{grid-column:1/-1}
+.myr-business #bwrap .myr-inv-save-grid .btn{min-height:44px}
+.myr-business #bwrap :is(#inv-customer,#inv-items,#inv-details,.myr-inv-summary){scroll-margin-top:60px}
+.myr-business .chart-bar,.myr-business .myr-ref-wave{animation:none!important}
+@media(max-width:350px){.myr-business .top{gap:3px;padding:0 5px}.myr-business .top .myr-global-search,.myr-business .top .myr-top-icon{width:32px}.myr-business .content{padding-inline:6px}.myr-business #bwrap .myr-inv-new-customer{padding:0 5px}}
+}
 </style>
 </head>
 <body>
@@ -3973,13 +4133,18 @@ function previewDemoLhdn(result){
 const NAV=[['dashboard','Dashboard','grid'],['invoices','Sales & Invoices','file'],['einvoice','E-Invoice Centre','shield'],['customers','Customers','users'],['products','Products & Services','pkg'],['payments','Payments','card'],['import','Bulk Import','upload'],['reports','Reports','chart'],['team','Team & Accountant','brief'],['integrations','Integrations','plug'],['billing','Billing','receipt'],['settings','Settings','sliders'],['help','Help & Support','help']];
 const rescueList=co=>co.invoices.filter(i=>i.lhdn.status==='Invalid'||(i.lhdn.lastError&&['transport','auth','rate','api'].includes(i.lhdn.lastError.kind)&&i.lhdn.status==='Not Submitted')||(['Ready','Submission Queued'].includes(i.appStatus)&&!locked(i)&&runCheck(i,co).errors.length));
 async function retryCloudSave(){if(!CLOUD)return;clearTimeout(PUSH_T);PUSH_T=null;const ok=await cloudPush();if(ok)toast('All changes saved to cloud');rerender()}
+function myrPhoneNav(page,p,co){
+ const edit=page==='invoices'&&['new','edit'].includes(p[1]),allow=can('Create')&&co.status!=='suspended';
+ const link=(route,icon,label,on,primary=false)=>'<a class="myr-phone-tab'+(on?' active':'')+(primary?' primary':'')+'" href="#/app/'+route+'"'+(on?' aria-current="page"':'')+'>'+ic(icon,20)+'<span>'+label+'</span></a>';
+ return '<nav hidden class="myr-phone-nav" aria-label="Mobile workspace navigation">'+link('dashboard','grid','Home',page==='dashboard')+link('invoices','receipt','Invoices',page==='invoices'&&(!edit||!allow))+(allow?link('invoices/new','plus','Create',edit,true):link('payments','card','Payments',page==='payments',true))+link('customers','users','Contacts',page==='customers')+'<button class="myr-phone-tab'+(!['dashboard','invoices','customers'].includes(page)&&!(page==='payments'&&!allow)?' active':'')+'" type="button" onclick="toggleSide()" aria-label="More sections">'+ic('menu',20)+'<span>More</span></button></nav>'
+}
 function vApp(p){const co=CO();if(!co)return go('#/app/onboarding');DB.currentId=co.id;const page=p[0]||'dashboard';
  const V={dashboard:vDashboard,invoices:vInvoices,einvoice:vEInvoice,customers:vCustomers,products:vProducts,payments:vPayments,import:vImport,reports:vReports,team:vTeam,integrations:vIntegrations,billing:vBilling,settings:vSettings,help:vHelp};
  const body=(V[page]||vDashboard)(p.slice(1));if(body==null)return null;const nRes=rescueList(co).length;const creating=page==='invoices'&&p[1]==='new';
  document.title=(creating?'Create Invoice':NAV.find(n=>n[0]===page)?.[1]||'App')+' — MYR Invoice';
  return `<div class="app myr-workspace myr-business ${page==='dashboard'?'myr-overview':''} ${myrIsDark()?'myr-dark':''}"><aside class="side" id="side"><a class="brand" href="#/app/dashboard">${LOGO(32)}<div><b>MYR Invoice</b><small>Smart E-Invoicing</small></div></a><nav class="nav" aria-label="Business navigation">${NAV.map(([k,l,i],n)=>`${({0:'WORKSPACE',1:'SALES & OPERATIONS',7:'MANAGEMENT',9:'ACCOUNT'})[n]?`<div class="myr-nav-caption">${({0:'WORKSPACE',1:'SALES & OPERATIONS',7:'MANAGEMENT',9:'ACCOUNT'})[n]}</div>`:''}${k==='invoices'&&can('Create')?`<a href="#/app/invoices/new" ${creating?'aria-current="page"':''} class="${creating?'on':''}">${ic('plus')}<span>Create Invoice</span></a>`:''}<a href="#/app/${k}" ${k===page&&!creating?'aria-current="page"':''} class="${k===page&&!creating?'on':''}" onclick="$('#side').classList.remove('open')">${ic(i)}<span>${k==='invoices'?'Invoices':l}</span>${k==='einvoice'&&nRes?`<em class="cnt">${nRes}</em>`:''}</a>`).join('')}</nav><div class="side-f"><div class="envpill"><i class="${co.lhdn.health==='connected'?'ok':''}"></i><span>LHDN ${co.lhdn.env==='production'?'Production':'Sandbox'} · ${lhdnHealth(co)}</span></div><details class="myr-profile"><summary><span class="myr-profile-avatar">${esc((user().name||'U')[0])}</span><span><b>${esc(user().name||'My account')}</b><small>${esc(co.plan)} · ${esc(role())}</small></span><i>⌄</i></summary><div><a href="#/app/settings">${ic('sliders',15)} Settings</a>${isPlatformAdmin()?`<a href="#/admin">${ic('lock',15)} Super Admin</a>`:''}<button onclick="logout()">${ic('out',15)} Log out</button></div></details></div></aside><div class="scrim" onclick="toggleSide()"></div>
- <div class="main"><header class="top"><button class="btn g menu-btn" onclick="toggleSide()" aria-label="Menu">${ic('menu')}</button><select class="cosel" onchange="switchCo(this.value)" aria-label="Company">${myCos().map(c=>`<option value="${c.id}" ${c.id===co.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select><button class="myr-global-search" type="button" onclick="myrSearch()">${ic('search',18)}<span>Search customers, invoices, products...</span><kbd>Ctrl + K</kbd></button><div style="flex:1"></div><button class="myr-top-icon" type="button" onclick="myrNotifications()" aria-label="Notifications" title="Notifications">${ic('bell',20)}${nRes?'<i></i>':''}</button><button class="myr-top-icon" id="myr-theme-toggle" type="button" onclick="myrTheme(!myrIsDark())" aria-label="Toggle dark theme" aria-pressed="${myrIsDark()}" title="Toggle theme"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/></svg></button><details class="myr-top-profile"><summary aria-label="Account menu"><span class="avatar">${esc((user().name||'U')[0])}</span>⌄</summary><div><a href="#/app/settings">Account settings</a>${isPlatformAdmin()?'<a href="#/admin">Super Admin</a>':''}<button onclick="logout()">Log out</button></div></details></header>
- ${CLOUD&&UNSYNCED_CLOUD?'<div class="localbar" style="background:#FFF7ED;color:#9A3412;border-color:#FDBA74">Changes are waiting for cloud sync. <button class="btn sm" onclick="retryCloudSave()">Retry save</button> Do not close this tab until saved.</div>':''}${co.status==='suspended'?'<div class="localbar" style="background:#FEF2F2;color:#7F1D1D;border-color:#FECACA">This company account is suspended. Data is read-only. Contact support.</div>':''}${CLOUD?(co.demo?'<div class="localbar" style="background:#FFFBEB;color:#92400E;border-color:#FDE68A"><b>DEMO LAB</b> · Fictional data only. Real LHDN submissions and public links are disabled.</div>':''):`<div class="localbar">Local mode — data is stored in this browser only${co.demo?' · <b>Fictional demo company</b>':''}. Connect the Supabase backend before going live.</div>`}<main class="content">${body}</main></div></div>`}
+ <div class="main"><header class="top"><button class="btn g menu-btn" onclick="toggleSide()" aria-label="Menu">${ic('menu')}</button><select class="cosel" onchange="switchCo(this.value)" aria-label="Company">${myCos().map(c=>`<option value="${c.id}" ${c.id===co.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select><button class="myr-global-search" type="button" onclick="myrSearch()">${ic('search',18)}<span>Search customers, invoices, products...</span><kbd>Ctrl + K</kbd></button><div style="flex:1"></div><button class="myr-top-icon" type="button" onclick="myrNotifications()" aria-label="Notifications" title="Notifications">${ic('bell',20)}${nRes?'<i></i>':''}</button><button class="myr-top-icon" id="myr-theme-toggle" type="button" onclick="myrTheme(!myrIsDark())" aria-label="Toggle dark theme" aria-pressed="${myrIsDark()}" title="Toggle theme"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/></svg></button><details class="myr-top-profile"><summary aria-label="Account menu"><span class="avatar">${esc((user().name||'U')[0])}</span>⌄</summary><div><a href="#/app/settings">Account settings</a>${isPlatformAdmin()?'<a href="#/admin">Super Admin</a>':''}<button hidden class="myr-phone-theme" type="button" onclick="myrTheme(!myrIsDark());this.closest('details').open=false">Switch light / dark theme</button><button onclick="logout()">Log out</button></div></details></header>
+ ${CLOUD&&UNSYNCED_CLOUD?'<div class="localbar" style="background:#FFF7ED;color:#9A3412;border-color:#FDBA74">Changes are waiting for cloud sync. <button class="btn sm" onclick="retryCloudSave()">Retry save</button> Do not close this tab until saved.</div>':''}${co.status==='suspended'?'<div class="localbar" style="background:#FEF2F2;color:#7F1D1D;border-color:#FECACA">This company account is suspended. Data is read-only. Contact support.</div>':''}${CLOUD?(co.demo?'<div class="localbar" style="background:#FFFBEB;color:#92400E;border-color:#FDE68A"><b>DEMO LAB</b> · Fictional data only. Real LHDN submissions and public links are disabled.</div>':''):`<div class="localbar">Local mode — data is stored in this browser only${co.demo?' · <b>Fictional demo company</b>':''}. Connect the Supabase backend before going live.</div>`}<main class="content">${body}</main></div>${myrPhoneNav(page,p,co)}</div>`}
 const ph=(title,sub,actions='',back='')=>`<div class="ph"><div>${back?`<a class="back" href="${back[0]}">← ${back[1]}</a>`:''}<h1>${title}</h1>${sub?`<p>${sub}</p>`:''}</div><div class="row">${actions}</div></div>`;
 const tabs=(base,list,active)=>`<div class="tabs">${list.map(([k,l])=>`<a href="${base}${k?'/'+k:''}" class="${k===active?'on':''}">${l}</a>`).join('')}</div>`;
 
@@ -4031,7 +4196,7 @@ function vDashboard(){
 /* ================= Invoices ================= */
 let LIST={q:'',f:'all'};
 function invTable(list,co,compact){if(!list.length)return empty('file','No documents yet','Create your first invoice or import from Excel.',can('Create')?`<a class="btn p" href="#/app/invoices/new">Create invoice</a>`:'');
- return `<div class="tw"><table class="t"><thead><tr><th>Number</th>${compact?'':'<th>Type</th>'}<th>Customer</th><th>Date</th><th class="r">Amount</th>${compact?'':'<th>Application</th>'}<th>LHDN</th><th>Payment</th></tr></thead><tbody>${list.map(i=>{const c=custOf(co,i);const t=calc(i);return `<tr class="click" onclick="go('#/app/invoices/view/${i.id}')"><td class="b nowrap">${esc(i.number)}${BUSY.has(i.id)?' <span class="muted sm">…</span>':''}</td>${compact?'':`<td class="nowrap">${esc(DOC_TYPES[i.docType])}${i.consolidated?' <span class="badge">Consolidated</span>':''}</td>`}<td style="min-width:170px">${esc(c?.name||'—')}</td><td class="nowrap">${fmtDate(i.issueDate)}</td><td class="r num nowrap">${money(t.total,i.currency)}</td>${compact?'':`<td>${AB(i.appStatus)}</td>`}<td>${B(i.lhdn.status)}</td><td>${B(payStatus(i))}</td></tr>`}).join('')}</tbody></table></div>`}
+ return `<div class="tw myr-phone-invoice-table"><table class="t"><thead><tr><th>Number</th>${compact?'':'<th>Type</th>'}<th>Customer</th><th>Date</th><th class="r">Amount</th>${compact?'':'<th>Application</th>'}<th>LHDN</th><th>Payment</th></tr></thead><tbody>${list.map(i=>{const c=custOf(co,i);const t=calc(i);return `<tr class="click" onclick="go('#/app/invoices/view/${i.id}')"><td class="b nowrap">${esc(i.number)}${BUSY.has(i.id)?' <span class="muted sm">…</span>':''}</td>${compact?'':`<td class="nowrap">${esc(DOC_TYPES[i.docType])}${i.consolidated?' <span class="badge">Consolidated</span>':''}</td>`}<td style="min-width:170px">${esc(c?.name||'—')}</td><td class="nowrap">${fmtDate(i.issueDate)}</td><td class="r num nowrap">${money(t.total,i.currency)}</td>${compact?'':`<td>${AB(i.appStatus)}</td>`}<td>${B(i.lhdn.status)}</td><td>${B(payStatus(i))}</td></tr>`}).join('')}</tbody></table></div><div hidden class="myr-phone-invoice-list">${list.map(i=>{const buyer=custOf(co,i);return '<a class="myr-phone-invoice" href="#/app/invoices/view/'+encodeURIComponent(i.id)+'"><span class="myr-phone-doc-icon">'+ic('receipt',19)+'</span><div class="myr-phone-doc-copy"><b>'+esc(i.number)+'</b><span>'+esc(buyer?.name||'—')+'</span><small>'+fmtDate(i.issueDate)+' · '+esc(DOC_TYPES[i.docType]||'Invoice')+'</small></div><div class="myr-phone-doc-right"><b>'+esc(money(calc(i).total,i.currency))+'</b><div>'+AB(i.appStatus)+B(i.lhdn.status)+B(payStatus(i))+'</div></div></a>'}).join('')}</div>`}
 function filterInv(co){const q=LIST.q.toLowerCase();return co.invoices.filter(i=>{const c=custOf(co,i);if(q&&!((i.number||'').toLowerCase().includes(q)||(c?.name||'').toLowerCase().includes(q)||(c?.tin||'').toLowerCase().includes(q)))return false;switch(LIST.f){case 'draft':return i.appStatus==='Draft';case 'approval':return i.appStatus==='Approval Pending';case 'ready':return ['Ready','Submission Queued'].includes(i.appStatus)&&!locked(i);case 'processing':return i.lhdn.status==='Submitted';case 'valid':return i.lhdn.status==='Valid';case 'invalid':return i.lhdn.status==='Invalid';case 'unpaid':return ['Unpaid','Partially Paid','Overdue'].includes(payStatus(i));case 'adj':return isAdj(i);default:return true}})}
 function vInvoices(p){const co=CO();if(p[0]==='new')return vBuilder();if(p[0]==='edit')return vBuilder(p[1]);if(p[0]==='view')return vInvoiceView(p[1]);
  const qs=new URLSearchParams(location.hash.split('?')[1]||'');if(qs.get('f'))LIST.f=qs.get('f');
@@ -4329,7 +4494,7 @@ function vCustomers(p){const co=CO();const t=p[0]||'';const qs=new URLSearchPara
  return head+`<div class="card"><div class="ch" style="flex-wrap:wrap"><div class="pills">${[['','All'],['issues','Missing details'],['ready','Ready'],['archived','Archived']].map(([k,l])=>`<button class="${CQ.f===k?'on':''}" onclick="CQ.f='${k}';drawCust()">${l}</button>`).join('')}</div><input placeholder="Search name, TIN, email" style="max-width:320px" value="${esc(CQ.q)}" oninput="CQ.q=this.value;drawCust()"></div><div id="custt">${custTable(co)}</div></div>`}
 function custTable(co){const q=CQ.q.toLowerCase();const l=co.customers.filter(c=>{if(CQ.f==='archived'?!c.archived:c.archived)return false;if(q&&!(`${c.name} ${c.tin} ${c.email} ${c.idValue}`.toLowerCase().includes(q)))return false;const e=custErrors(c).length;if(CQ.f==='issues'&&!e)return false;if(CQ.f==='ready'&&e)return false;return true});
  if(!l.length)return empty('users','No customers found','Add customers manually, import a spreadsheet, or collect details with a QR request.');
- return `<div class="tw"><table class="t"><thead><tr><th>Customer</th><th>TIN</th><th>ID</th><th>Contact</th><th class="r">Outstanding</th><th>e-Invoice details</th><th></th></tr></thead><tbody>${l.map(c=>{const e=custErrors(c);const out=co.invoices.filter(i=>i.customerId===c.id&&isSale(i)).reduce((a,i)=>a+balance(i),0);return `<tr><td><b>${esc(c.name)}</b>${c.system?' <span class="badge">System</span>':''}<div class="muted sm">${esc(c.addr?.city||'')}</div></td><td class="mono">${esc(c.tin||'—')}</td><td class="sm">${esc(c.idType||'')} ${esc(c.idValue||'—')}</td><td class="sm">${esc(c.email||'')}<div class="muted">${esc(c.phone||'')}</div></td><td class="r num">${out?money(out):'—'}</td><td>${e.length?`<span class="badge b-warn" title="${esc(e.map(x=>x.problem).join('; '))}">${e.length} missing</span>`:B('Ready2')}</td><td class="r nowrap"><button class="btn sm" onclick="custModal('${c.id}')">Edit</button>${c.system?'':`<button class="btn sm g" onclick="archiveCust('${c.id}')">${c.archived?'Restore':'Archive'}</button>`}</td></tr>`}).join('')}</tbody></table></div>`}
+ return `<div class="tw myr-phone-contacts"><table class="t"><thead><tr><th>Customer</th><th>TIN</th><th>ID</th><th>Contact</th><th class="r">Outstanding</th><th>e-Invoice details</th><th></th></tr></thead><tbody>${l.map(c=>{const e=custErrors(c);const out=co.invoices.filter(i=>i.customerId===c.id&&isSale(i)).reduce((a,i)=>a+balance(i),0);return `<tr><td><b>${esc(c.name)}</b>${c.system?' <span class="badge">System</span>':''}<div class="muted sm">${esc(c.addr?.city||'')}</div></td><td class="mono">${esc(c.tin||'—')}</td><td class="sm">${esc(c.idType||'')} ${esc(c.idValue||'—')}</td><td class="sm">${esc(c.email||'')}<div class="muted">${esc(c.phone||'')}</div></td><td class="r num">${out?money(out):'—'}</td><td>${e.length?`<span class="badge b-warn" title="${esc(e.map(x=>x.problem).join('; '))}">${e.length} missing</span>`:B('Ready2')}</td><td class="r nowrap"><button class="btn sm" onclick="custModal('${c.id}')">Edit</button>${c.system?'':`<button class="btn sm g" onclick="archiveCust('${c.id}')">${c.archived?'Restore':'Archive'}</button>`}</td></tr>`}).join('')}</tbody></table></div>`}
 function drawCust(){$('#custt').innerHTML=custTable(CO());$$('.pills button').forEach(b=>b.classList.toggle('on',b.getAttribute('onclick').includes(`'${CQ.f}'`)))}
 let CM_FROM_BUILDER=false;
 let CM_EXPECTED=null;
@@ -4457,7 +4622,7 @@ async function sendCorrection(){const msg=val('pc-m'),email=val('pc-e');if(!msg)
  closeModal();toast('Request sent to supplier')}
 
 /* ================= Products ================= */
-function vProducts(){const co=CO();return ph('Products & Services','Saved items with classification codes, units and tax treatment.',`<button class="btn p" onclick="prodModal()">${ic('plus',16)}Add item</button>`)+`<div class="card">${co.products.length?`<div class="tw"><table class="t"><thead><tr><th>Item</th><th>Classification</th><th>Unit</th><th class="r">Price</th><th>Tax</th><th></th></tr></thead><tbody>${co.products.map(p=>`<tr><td><b>${esc(p.name)}</b>${p.desc&&p.desc!==p.name?`<div class="muted sm">${esc(p.desc)}</div>`:''}</td><td class="sm">${esc(p.classCode)} — ${esc(CLASS[p.classCode]||'?')}</td><td>${esc(p.unitCode)}</td><td class="r num">${money(p.price)}</td><td class="sm">${esc(p.taxType)}${+p.taxRate?' · '+p.taxRate+'%':''}</td><td class="r nowrap"><button class="btn sm" onclick="prodModal('${p.id}')">Edit</button><button class="btn sm g d" onclick="delProd('${p.id}')">Delete</button></td></tr>`).join('')}</tbody></table></div>`:empty('pkg','No saved items','Save frequently sold products and services to create invoices faster.',`<button class="btn p" onclick="prodModal()">Add item</button>`)}</div>`}
+function vProducts(){const co=CO();return ph('Products & Services','Saved items with classification codes, units and tax treatment.',`<button class="btn p" onclick="prodModal()">${ic('plus',16)}Add item</button>`)+`<div class="card">${co.products.length?`<div class="tw myr-phone-products"><table class="t"><thead><tr><th>Item</th><th>Classification</th><th>Unit</th><th class="r">Price</th><th>Tax</th><th></th></tr></thead><tbody>${co.products.map(p=>`<tr><td><b>${esc(p.name)}</b>${p.desc&&p.desc!==p.name?`<div class="muted sm">${esc(p.desc)}</div>`:''}</td><td class="sm">${esc(p.classCode)} — ${esc(CLASS[p.classCode]||'?')}</td><td>${esc(p.unitCode)}</td><td class="r num">${money(p.price)}</td><td class="sm">${esc(p.taxType)}${+p.taxRate?' · '+p.taxRate+'%':''}</td><td class="r nowrap"><button class="btn sm" onclick="prodModal('${p.id}')">Edit</button><button class="btn sm g d" onclick="delProd('${p.id}')">Delete</button></td></tr>`).join('')}</tbody></table></div>`:empty('pkg','No saved items','Save frequently sold products and services to create invoices faster.',`<button class="btn p" onclick="prodModal()">Add item</button>`)}</div>`}
 let PROD_EXPECTED=null;
 function prodModal(id){const p=id?CO().products.find(x=>x.id===id):{name:'',desc:'',classCode:'022',unitCode:'C62',price:0,taxType:'06',taxRate:0};PROD_EXPECTED=id?clone(p):null;modal(id?'Edit item':'Add item',`${field('pm-n','Name *',p.name)}${field('pm-d','Description on invoice',p.desc)}<div class="fg"><label class="f">Classification code</label><select id="pm-c">${opt(Object.entries(CLASS).map(([k,v])=>[k,k+' — '+v]),p.classCode)}</select></div><div class="grid g3"><div class="fg"><label class="f">Unit</label><select id="pm-u">${opt(UNITS,p.unitCode)}</select></div>${field('pm-p','Unit price (RM)',(p.price/100).toFixed(2),'text','inputmode="decimal"')}${field('pm-r','Tax rate %',p.taxRate,'number','min="0" max="100" step="any"')}</div><div class="fg"><label class="f">Tax type</label><select id="pm-t">${opt(TAX_TYPES,p.taxType)}</select></div>`,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn p" onclick="saveProd('${id||''}')">Save</button>`)}
 async function saveProd(id){
