@@ -3333,6 +3333,76 @@ body:has(#bwrap) .toast{border-radius:12px;box-shadow:0 5px 20px #10234326}
 .ux-ref .ux-footer{padding:12px 0}
 @media(max-width:350px){.ux-ref .ux-phone-trust[hidden]{grid-template-columns:1.3fr 1fr 1fr 1fr;gap:3px;padding:6px 4px}.ux-ref .ux-phone-trust>div svg{width:12px}.ux-ref .ux-feature{grid-template-columns:22px minmax(0,1fr);padding:5px!important;gap:4px!important}.ux-ref .ux-feature .ux-icon{width:22px;height:22px}}
 }
+
+/* Final mobile finish: same structure and native scrolling; refined visual system. */
+@media screen and (max-width:767px){
+.site.ux-ref{--phone-ink:#10223e;--phone-muted:#52647d;--phone-line:#e1e8f2;--phone-blue:#0753ed;background:#f8faff;color:var(--phone-ink);-webkit-font-smoothing:antialiased}
+.site.ux-ref .ux-wrap{padding-inline:14px}
+.ux-ref .ux-header{background:linear-gradient(110deg,#06172e,#09254a);border-bottom:1px solid #ffffff18}
+.ux-ref .ux-wordmark{letter-spacing:-.75px;font-weight:780}
+.ux-ref .ux-wordmark small{letter-spacing:.12px;opacity:.88}
+.ux-ref .ux-nav-cta .ux-btn.primary,.ux-ref .ux-copy .ux-btn.primary{background:linear-gradient(155deg,#1684fa,#0753ed 65%,#1246b9);border:1px solid #83c8ff38;box-shadow:inset 0 1px 0 #ffffff24,0 3px 9px #00194526}
+.ux-ref .ux-nav-cta .ux-btn{font-weight:650}
+.ux-ref .ux-hero{background:radial-gradient(ellipse at 95% 70%,#1263a8a8,transparent 58%),linear-gradient(135deg,#061a36 5%,#0a2a55 68%,#124d83);padding:14px 0 16px!important}
+.ux-ref .ux-hero .ux-orb{opacity:.24}
+.ux-ref .ux-pill{border:1px solid #b9dbff26;background:#ffffff0e;color:#ecf5ff;font-weight:650}
+.ux-ref .ux-copy h1{font-weight:770;letter-spacing:-.85px;line-height:1.13}
+.ux-ref .ux-copy h1 strong{background:linear-gradient(95deg,#b4edff,#50b9ff);background-clip:text;-webkit-background-clip:text;color:transparent}
+.ux-ref .ux-copy>p{color:#e4eefc}
+.ux-ref .ux-copy .ux-btn{border-radius:10px;font-weight:650}
+.ux-ref .ux-copy .ux-btn.outline{background:#ffffff08;border-color:#a9d5ff66}
+.ux-ref .ux-checks{color:#e0edff;gap:5px 10px;font-weight:550}
+.ux-ref .ux-copy p.ux-small{color:#c2d6ef}
+.ux-ref .ux-phone-app{background:linear-gradient(155deg,#ffffff,#edf3fb);border:1px solid #b6d9ff;border-radius:16px;box-shadow:0 6px 18px #00183136,inset 0 1px 0 #fff;padding:9px}
+.ux-ref .ux-phone-app-head{border-color:#dfe8f4;padding-bottom:6px}
+.ux-ref .ux-phone-app-title>div b{font-weight:760;letter-spacing:-.45px}
+.ux-ref .ux-phone-app-title button{font-size:11px;font-weight:650;min-height:38px;background:linear-gradient(145deg,#247aff,#0753ed);box-shadow:0 2px 5px #0753ed19;border-radius:8px}
+.ux-ref .ux-phone-metrics>div,.ux-ref .ux-phone-recent{border-color:#dfe7f2;border-radius:9px;box-shadow:0 1px 2px #10223e06}
+.ux-ref .ux-phone-metrics>div:nth-child(2){background:#f8faff}
+.ux-ref .ux-phone-metrics b{font-variant-numeric:tabular-nums;font-weight:750}
+.ux-ref .ux-phone-app-nav{border-top:1px solid #dce5f1;margin-top:6px;padding-top:5px}
+.ux-ref .ux-phone-app-nav>span:nth-child(3){background:#e0edff;border-radius:8px;padding:3px 0}
+.ux-ref .ux-phone-caption{font-size:9px;letter-spacing:.1px}
+.ux-ref .ux-phone-trust[hidden]{border-color:#dfe8f4;border-radius:11px;box-shadow:0 2px 8px #10223e08;background:#fff}
+.ux-ref .ux-phone-trust>div{color:#445875}
+.ux-ref .ux-phone-trust>a b{font-weight:760}
+.ux-ref .ux-heading h2,.ux-ref .ux-bottom-grid h2,.ux-ref .ux-flow h2,.ux-ref .ux-benefits h2,.ux-ref .ux-faq h2{color:#10223e;letter-spacing:-.45px;font-weight:760}
+.ux-ref .ux-heading p,.ux-ref .ux-subtitle,.ux-ref .ux-flow-head p{color:var(--phone-muted)}
+.ux-ref .ux-feature{background:linear-gradient(150deg,#fff,#f4f8ff);border:1px solid var(--phone-line);border-radius:11px;box-shadow:0 1px 3px #10223e05;min-height:55px!important}
+.ux-ref .ux-feature .ux-icon{background:#e9f2ff;border:1px solid #dceaff;border-radius:9px;box-shadow:none;color:#1257ca}
+.ux-ref .ux-feature h3{font-weight:720;color:#142540}
+.ux-ref .ux-feature p{color:#52647d}
+.ux-ref .ux-flow{background:linear-gradient(145deg,#f4f8ff,#eaf2fd);border:1px solid #dce7f5;box-shadow:none;border-radius:12px}
+.ux-ref .ux-steps:before{background:#b7cef0}
+.ux-ref .ux-step .ux-num{background:#e0edff;color:#1257ca;border:1px solid #bfd6fa;font-weight:750}
+.ux-ref .ux-step h3{font-weight:700}
+.ux-ref .ux-phone-plan{border:1px solid #dce5f0;border-radius:12px;background:linear-gradient(145deg,#fff,#f9fbff);box-shadow:0 1px 4px #10223e06;padding:9px 10px}
+.ux-ref .ux-phone-plan.featured{background:linear-gradient(135deg,#105eed,#103c97 65%,#0c285c);border:1px solid #3978e8;box-shadow:0 3px 10px #0a4ba31a}
+.ux-ref .ux-phone-plan-head b{font-weight:750}
+.ux-ref .ux-phone-plan-head strong{font-weight:770;font-variant-numeric:tabular-nums}
+.ux-ref .ux-phone-plan-head>div small{background:#e0edff;font-weight:600}
+.ux-ref .ux-phone-plan-actions>a{border:1px solid #cbd9ee;background:#fff;color:#16458e;font-weight:650}
+.ux-ref .ux-phone-plan.featured .ux-phone-plan-actions>a{background:#f7faff;border-color:#fff;color:#103c97}
+.ux-ref .ux-phone-plan-actions summary{font-weight:650}
+.ux-ref .ux-phone-plan-actions details[open] ul{border-top:1px solid #a9c0e43b;padding-top:7px}
+.ux-ref .ux-benefits>div>span{box-shadow:none;background:#e7f6ee;border:1px solid #d4eee1}
+.ux-ref .ux-audiences{gap:5px}
+.ux-ref .ux-audiences article{background:#fff;border-color:var(--phone-line);box-shadow:none;border-radius:10px}
+.ux-ref .ux-faq{background:#fff;border:1px solid var(--phone-line);padding:10px;border-radius:12px}
+.ux-ref .ux-faq details{background:transparent;border:0;border-radius:0;margin:0;box-shadow:none}
+.ux-ref .ux-faq details+details{border-top:1px solid #e5ebf4}
+.ux-ref .ux-faq summary{min-height:44px;padding:7px 2px;font-size:12px;font-weight:650;gap:8px}
+.ux-ref .ux-faq summary span{color:#3569bc}
+.ux-ref .ux-faq details[open] p{padding:0 2px 9px;color:#53647e;font-size:11px;line-height:1.5}
+.ux-ref .ux-resource-panel{background:#fff;border-color:var(--phone-line);border-radius:11px}
+.ux-ref .ux-banner{background:linear-gradient(125deg,#155de2,#0d3479 70%,#0a244e);border-radius:12px;border:1px solid #3876d5;box-shadow:none}
+.ux-ref .ux-banner h2{color:#fff;font-weight:750;letter-spacing:-.4px}
+.ux-ref .ux-banner .ux-btn{border-radius:9px;font-weight:650}
+.ux-ref .ux-footer{background:linear-gradient(120deg,#07182f,#0a2343)}
+.ux-ref .ux-footer-top nav button{color:#d7e4f7;font-weight:550}
+.ux-ref .ux-footer-bottom{border-color:#ffffff1c;color:#bbcce2}
+.ux-ref :is(a,button,summary):focus-visible{outline:2px solid #55a8ff;outline-offset:2px}
+}
 </style>
 </head>
 <body>
