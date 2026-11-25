@@ -10,6 +10,7 @@ from staging_api import api, db, bearer
 from hybrid_workspace import verify_user, workspace, GRANT
 from native_record_writes import save_record, WriteRejected
 from app import connect
+from native_payment_ops import add_payment, delete_record
 
 WRITE_GRANT=GRANT.with_name("hybrid-write-test-company")
 TEST_NAME="MYR VPS WRITE TEST (synthetic)"
@@ -57,6 +58,39 @@ def write_test(body:RecordBody,request:Request,conn=Depends(db)):
     except WriteRejected as exc:
         conn.rollback()
         raise HTTPException(409,str(exc)) from None
+
+class PaymentBody(BaseModel):
+    p_company_id:UUID
+    p_invoice_id:str
+    p_payment:dict
+
+class DeleteBody(BaseModel):
+    p_company_id:UUID
+    p_kind:str
+    p_expected:dict
+
+def checked_operation(conn,request,cid,operation):
+    uid,email=verify_user(bearer(request))
+    co=test_company(conn,uid,email)
+    if co["id"]!=cid:
+        raise HTTPException(403,"Only the synthetic test company can be changed")
+    try:
+        result=operation(uid,email)
+        conn.commit()
+        return result
+    except WriteRejected as exc:
+        conn.rollback()
+        raise HTTPException(409,str(exc)) from None
+
+@api.post("/hybrid/test-payment")
+def payment_test(body:PaymentBody,request:Request,conn=Depends(db)):
+    return checked_operation(conn,request,body.p_company_id,
+        lambda uid,email:add_payment(conn,uid,email,body.p_company_id,body.p_invoice_id,body.p_payment))
+
+@api.post("/hybrid/test-delete")
+def deletion_test(body:DeleteBody,request:Request,conn=Depends(db)):
+    return checked_operation(conn,request,body.p_company_id,
+        lambda uid,email:delete_record(conn,uid,email,body.p_company_id,body.p_kind,body.p_expected))
 
 def setup():
     uid=UUID(GRANT.read_text().strip())
