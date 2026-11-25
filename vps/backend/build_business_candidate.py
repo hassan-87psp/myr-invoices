@@ -60,14 +60,17 @@ function rmMember(e){confirmBox('Remove member?','This removes company access.',
 """+html[end:]
     html=once(html,"const endpoint={atomic_save_record:","const endpoint={admin_set_company:'/admin/company',atomic_save_record:")
     html=once(html,"SB.rpc('admin_set_company',{p_id:id,p_status:status||null,p_plan:plan||null})","SB.rpc('admin_set_company',{p_company_id:id,p_version:ADM.rows.find(r=>r.id===id)?.version,p_status:status||null,p_plan:plan||null})")
+    # Candidate reads never activate invitations. The write endpoint is invoked
+    # only after the workspace explicitly reports production writes enabled.
+    html=once(html,"const result=await response.json();if(result.mode!==","let result=await response.json();if(result.writes_enabled===true){const accepted=await fetch('/team/accept',{method:'POST',headers:{Authorization:'Bearer '+session.access_token},cache:'no-store'});if(!accepted.ok)throw new Error('Could not check team invitations');const state=await accepted.json();if(state.accepted>0){const updated=await fetch('/workspace',{headers:{Authorization:'Bearer '+session.access_token},cache:'no-store'});if(!updated.ok)throw new Error('Could not reload team workspace');result=await updated.json()}}if(result.mode!==")
     # Optional same-origin production routing build. Private candidate stays
     # unchanged by default and the API write gate is never opened here.
     prefix=os.environ.get("MYR_BUSINESS_API_PREFIX","")
     if prefix not in ("","/api/myr"):
         raise SystemExit("Unapproved API prefix")
     if prefix:
-        html=once(html,"fetch('/workspace',","fetch('/api/myr/workspace',")
-        for route in ("/records","/payments","/delete","/profile","/team","/approval","/onboard","/links/read","/links/submit","/admin/dashboard","/admin/company"):
+        html=html.replace("fetch('/workspace',","fetch('/api/myr/workspace',")
+        for route in ("/records","/payments","/delete","/profile","/team","/team/accept","/approval","/onboard","/links/read","/links/submit","/admin/dashboard","/admin/company"):
             html=once(html,"'"+route+"'","'"+prefix+route+"'")
     # No fallback to the Supabase data API.
     assert "from:()=>{throw new Error(" in html
