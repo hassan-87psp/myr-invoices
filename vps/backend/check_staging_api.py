@@ -59,6 +59,12 @@ async def run(conn):
     check(status==200 and len(result)==1 and result[0]["id"]==str(own),"Tenant isolation failed")
     check((await request("GET",f"/companies/{own}/summary",token=token))[0]==200,"Own company unavailable")
     check((await request("GET",f"/companies/{other}/summary",token=token))[0]==404,"Cross-tenant summary exposed")
+    check((await request("GET",f"/companies/{own}/snapshot",token=token))[0]==404,"Read-only role received unrestricted snapshot")
+    conn.execute("UPDATE myr_native.company_members SET role='Owner' WHERE company_id=%s AND email=%s",(own,email))
+    conn.execute("UPDATE myr_native.companies SET data='{\"invoices\":[{\"id\":\"synthetic\"}]}'::jsonb WHERE id=%s",(own,))
+    status,result=await request("GET",f"/companies/{own}/snapshot",token=token)
+    check(status==200 and result["data"]["invoices"][0]["id"]=="synthetic","Owner snapshot failed")
+    check((await request("GET",f"/companies/{other}/snapshot",token=token))[0]==404,"Cross-tenant snapshot exposed")
     check((await request("POST","/auth/logout",token=token))[0]==204,"Logout failed")
     check((await request("GET","/auth/me",token=token))[0]==401,"Revoked session accepted")
 
