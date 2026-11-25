@@ -21,7 +21,7 @@ def main():
         ("'/hybrid/test-payment'","'/payments'"),
         ("'/hybrid/test-delete'","'/delete'"),
         ("'/hybrid/test-profile'","'/profile'"),
-        ("atomic_team:'/hybrid/test-team',atomic_approval:'/hybrid/test-approval',atomic_onboard:'/hybrid/test-onboard'","atomic_onboard:'/onboard'"),
+        ("atomic_team:'/hybrid/test-team',atomic_approval:'/hybrid/test-approval',atomic_onboard:'/hybrid/test-onboard'","atomic_team:'/team',atomic_approval:'/approval',atomic_onboard:'/onboard'"),
         ("const rows=result.companies,mem={data:result.members},docs={data:result.documents},links={data:[]};","const rows=result.companies,mem={data:result.members},docs={data:result.documents},links={data:result.links||[]};"),
         ("PRIVATE VPS WRITE TEST — SYNTHETIC DATA ONLY — Draft invoices, customers, products and manual payments. Other writes disabled.","PRIVATE VPS DATABASE CANDIDATE — Real imported data read-only. Production saves and external integrations disabled."),
     ):
@@ -33,15 +33,13 @@ def main():
 """+html[end:]
     start=html.index("async function vpsTeam(")
     end=html.index("function verifyAudit(){",start)
-    html=html[:start]+"""async function saveInvite(){toast('Team management is not enabled in this candidate.','err')}
-async function setRole(){toast('Team management is not enabled in this candidate.','err')}
-function rmMember(){toast('Team management is not enabled in this candidate.','err')}
+    html=html[:start]+"""async function vpsTeam(op,email,role){const co=CO();if(!co||!can('Invite Team')||!(await atomicReady(co)))return;const {data,error}=await SB.rpc('atomic_team',{p_company_id:co.id,p_operation:op,p_email:email,p_role:role||null});if(error||!data)return toast(error?.message||'Team action rejected','err');await cloudLoad();closeModal();rerender();toast(op==='invite'?'Invitation recorded; email delivery not enabled.':'Team updated')}
+async function saveInvite(){return vpsTeam('invite',val('iv-e').trim().toLowerCase(),val('iv-r'))}
+async function setRole(e,r){return vpsTeam('role',e,r)}
+function rmMember(e){confirmBox('Remove member?','This removes company access.','Remove',()=>vpsTeam('remove',e),true)}
 """+html[end:]
-    start=html.index("async function vpsApproval(")
-    end=html.index("function confirmSubmit(id){",start)
-    html=html[:start]+"""async function markReady(){toast('Approval is not enabled in this candidate.','err')}
-async function approveInv(){toast('Approval is not enabled in this candidate.','err')}
-"""+html[end:]
+    html=once(html,"toast('Test workflow: '+data.record.appStatus)","toast('Workflow: '+data.record.appStatus)")
+    html=once(html,"toast('Test profile saved')","toast('Profile saved')")
     # No fallback to the Supabase data API.
     assert "from:()=>{throw new Error(" in html
     assert "/hybrid/test-" not in html and "/hybrid/write-workspace" not in html
