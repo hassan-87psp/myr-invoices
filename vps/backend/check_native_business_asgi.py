@@ -20,7 +20,8 @@ def main():
         headers=[]
         if session is not None: headers.append((b"cookie",(native.COOKIE+"="+session).encode()))
         if origin is not None: headers.append((b"origin",origin.encode()))
-        code,data=asyncio.run(harness.request(method,path,body,token,extra_headers=headers))
+        with patch.object(harness,"api",b.api):
+            code,data=asyncio.run(harness.request(method,path,body,token,extra_headers=headers))
         assert code==expected,(path,code,expected,data)
         return data
     try:
