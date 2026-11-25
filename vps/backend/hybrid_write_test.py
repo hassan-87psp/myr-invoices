@@ -12,20 +12,22 @@ from native_record_writes import save_record, WriteRejected
 from app import connect
 from native_payment_ops import add_payment, delete_record
 from native_profile_ops import save_profile
-from native_team_workflow import team_change, invoice_workflow
+from native_team_workflow import team_change, invoice_workflow, onboarding
 
 WRITE_GRANT=GRANT.with_name("hybrid-write-test-company")
 TEST_NAME="MYR VPS WRITE TEST (synthetic)"
-def test_company(conn, uid, email):
+def test_company(conn, uid, email, requested=None):
     # Existing verified preview grant required; no broader access.
     workspace(conn,uid,email)
     try:
         cid=UUID(WRITE_GRANT.read_text().strip())
     except (OSError,ValueError):
         raise HTTPException(403,"Synthetic write rehearsal not enabled") from None
+    if requested is not None:
+        cid=requested
     row=conn.execute("""SELECT c.id,c.name,c.tin,c.plan,c.status,c.version,c.data,c.created_at
       FROM myr_native.companies c JOIN myr_native.company_members m ON c.id=m.company_id
-      WHERE c.id=%s AND c.created_by=%s AND c.name=%s AND c.status='active'
+      WHERE c.id=%s AND c.created_by=%s AND (c.name=%s OR c.name LIKE 'TEST - %%') AND c.status='active'
         AND m.email=%s AND m.role='Owner' AND m.status='active'""",(cid,uid,TEST_NAME,email)).fetchone()
     if not row or row[6].get("vpsSyntheticWriteTest") is not True:
         raise HTTPException(403,"Synthetic test company unavailable")
@@ -41,8 +43,13 @@ def read_test(request:Request,conn=Depends(db)):
     uid,email=verify_user(bearer(request))
     conn.execute("SET TRANSACTION READ ONLY")
     co=test_company(conn,uid,email)
+    ids=conn.execute("""SELECT c.id FROM myr_native.companies c JOIN myr_native.company_members m ON m.company_id=c.id
+      WHERE c.created_by=%s AND m.email=%s AND m.role='Owner' AND m.status='active'
+      AND c.status='active' AND c.data->>'vpsSyntheticWriteTest'='true' AND c.name LIKE 'TEST - %%'
+      ORDER BY c.created_at""",(uid,email)).fetchall()
+    companies=[co]+[test_company(conn,uid,email,x[0]) for x in ids if x[0]!=co["id"]]
     return {"profile":{"id":uid,"email":email,"name":"Test owner","is_platform_admin":False},
-       "companies":[co],"members":members_for_test(conn,co["id"]),
+       "companies":companies,"members":[m for item in companies for m in members_for_test(conn,item["id"])],
        "documents":[],"links":[],"mode":"synthetic_write"}
 
 class RecordBody(BaseModel):
@@ -55,7 +62,7 @@ class RecordBody(BaseModel):
 @api.post("/hybrid/test-record")
 def write_test(body:RecordBody,request:Request,conn=Depends(db)):
     uid,email=verify_user(bearer(request))
-    co=test_company(conn,uid,email)
+    co=test_company(conn,uid,email,body.p_company_id)
     if co["id"]!=body.p_company_id:
         raise HTTPException(403,"Only the synthetic test company can be changed")
     # Serialize and commit before acknowledging success.
@@ -79,7 +86,7 @@ class DeleteBody(BaseModel):
 
 def checked_operation(conn,request,cid,operation):
     uid,email=verify_user(bearer(request))
-    co=test_company(conn,uid,email)
+    co=test_company(conn,uid,email,cid)
     if co["id"]!=cid:
         raise HTTPException(403,"Only the synthetic test company can be changed")
     try:
@@ -134,6 +141,24 @@ class ApprovalBody(BaseModel):
 def approval_test(body:ApprovalBody,request:Request,conn=Depends(db)):
     return checked_operation(conn,request,body.p_company_id,
         lambda uid,email:invoice_workflow(conn,uid,email,body.p_company_id,body.p_invoice_id,body.p_version,body.p_action))
+
+class OnboardBody(BaseModel):
+    p_name:str
+
+@api.post("/hybrid/test-onboard")
+def onboard_test(body:OnboardBody,request:Request,conn=Depends(db)):
+    uid,email=verify_user(bearer(request))
+    test_company(conn,uid,email)
+    try:
+        conn.execute("SELECT id FROM myr_native.users WHERE id=%s FOR UPDATE",(uid,)).fetchone()
+        if conn.execute("SELECT count(*) FROM myr_native.companies WHERE created_by=%s AND data->>'vpsSyntheticWriteTest'='true'",(uid,)).fetchone()[0]>=4:
+            raise WriteRejected("Maximum four synthetic companies in private rehearsal")
+        cid=onboarding(conn,uid,email,body.p_name)
+        conn.commit()
+        return {"id":str(cid)}
+    except WriteRejected as exc:
+        conn.rollback()
+        raise HTTPException(409,str(exc)) from None
 
 def setup():
     uid=UUID(GRANT.read_text().strip())
