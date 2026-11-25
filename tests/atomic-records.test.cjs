@@ -20,7 +20,7 @@ async function testAtomicInvoice(){
  const ed=JSON.parse(JSON.stringify(sampleInv));
  const called=[];let navigation='',saved=false;
  const sandbox=vm.createContext({
-  ED:ed,CO:()=>co,CLOUD:true,CFG:{atomicRecordWrites:true},
+  ED:ed,CO:()=>co, myrDraftClear:()=>{},CLOUD:true,CFG:{atomicRecordWrites:true},
   atomicEnabled:()=>true,atomicReady:async()=>true,
   INVOICE_SAVING:false,UNSYNCED_CLOUD:false,
   can:()=>true,bCheck:()=>({errors:[]}),

@@ -24,7 +24,7 @@ let ED = JSON.parse(JSON.stringify(savedInvoice));
 const messages = [];
 let saves=0;
 const sandbox = vm.createContext({
-  CO: () => co, can: () => true, clone: v=>JSON.parse(JSON.stringify(v)),
+  CO: () => co, myrDraftClear:()=>{}, can: () => true, clone: v=>JSON.parse(JSON.stringify(v)),
   locked: i => ['Submitted','Valid','Cancelled'].includes(i.lhdn.status),
   paidOf: i => i.payments.reduce((a,p)=>a+p.amount,0),
   calc: i => ({total:i.items.reduce((a,v)=>a+v.qty*v.price,0)}),
