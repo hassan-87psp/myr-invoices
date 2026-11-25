@@ -1,6 +1,6 @@
 """Separate VPS production API candidate. Not the private staging app.
 
-Only verified, imported Supabase identities and active owners may access real
+Only verified, provisioned Supabase identities and active members may access real
 company snapshots. Writes fail closed unless an operator explicitly enables
 them after reconciliation and complete frontend acceptance. Bind loopback only.
 """
@@ -85,7 +85,7 @@ def workspace(conn,profile):
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute("""SELECT c.id,c.name,c.tin,c.plan,c.status,c.version,c.data,c.created_at
             FROM myr_native.companies c JOIN myr_native.company_members m ON m.company_id=c.id
-            WHERE m.email=%s AND m.role='Owner' AND m.status='active' AND c.status='active'
+            WHERE m.email=%s AND m.role IN ('Owner','Admin','Accountant','Invoice Staff','Approver','Read-Only') AND m.status='active' AND c.status='active'
             AND c.data->>'vpsSyntheticWriteTest' IS DISTINCT FROM 'true'
             ORDER BY c.created_at,c.id""",(profile["email"],))
         companies=cur.fetchall()
@@ -314,7 +314,7 @@ def test():
             except HTTPException as exc: assert exc.status_code==404
             else: raise AssertionError("Cross-tenant or synthetic access")
         conn.execute("UPDATE myr_native.company_members SET role='Read-Only' WHERE company_id=%s AND email=%s",(cid,email))
-        assert workspace(conn,profile)["companies"]==[]
+        assert [x["id"] for x in workspace(conn,profile)["companies"]]==[cid]
         try: owner_company(conn,profile,cid,roles=("Owner","Admin","Accountant","Invoice Staff"))
         except HTTPException as exc: assert exc.status_code==404
         else: raise AssertionError("Read-only user authorized for writes")
