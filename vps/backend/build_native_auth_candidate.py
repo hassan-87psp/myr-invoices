@@ -69,6 +69,8 @@ def transform(html):
     html=once(html,"if(p[0]==='login'||p[0]==='signup')return paint(vAuth(p[0]));","if(p[0]==='auth')return paint(myrFinishView(p[1]));if(p[0]==='login'||p[0]==='signup')return paint(vAuth(p[0]));")
     html=once(html,"await SB.auth.signOut();myrDraftClearAll();","const signedOut=await SB.auth.signOut();if(signedOut.error)return toast('Sign-out failed. Retry.','err');myrDraftClearAll();")
     html=once(html,"Start with the LHDN sandbox. No card required.","Create your account with a secure email verification link. No card required.")
+    from build_lhdn_candidate import transform as lhdn_transform
+    html=lhdn_transform(html)
     assert "from:()=>{throw new Error(" in html
     return html
 

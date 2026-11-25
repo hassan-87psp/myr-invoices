@@ -22,6 +22,7 @@ from business_admin import admin_company_rows, set_company, link_inventory, dash
 from business_links import read_link, submit_link
 from business_link_ops import operate as link_operation
 import business_native_auth as native
+import business_lhdn as central_lhdn
 
 api=FastAPI(title="MYR business API",docs_url=None,redoc_url=None,openapi_url=None)
 WRITE_FLAG=Path.home()/".config/myrinvoice/production-writes-enabled"
@@ -154,7 +155,9 @@ def health(conn=Depends(db)):
 @api.get("/workspace")
 def read_workspace(request:Request,conn=Depends(db)):
     conn.execute("SET TRANSACTION READ ONLY")
-    return workspace(conn,workspace_identity(conn,request))
+    data=workspace(conn,workspace_identity(conn,request))
+    data["central_lhdn"]=central_lhdn.customer_context()
+    return data
 
 @api.get("/native/workspace")
 def native_workspace(request:Request,conn=Depends(db)):
@@ -304,7 +307,10 @@ def admin_identity(conn,request):
 @api.get("/admin/dashboard")
 def admin_dashboard(request:Request,conn=Depends(db)):
     conn.execute("SET TRANSACTION READ ONLY")
-    return dashboard(conn,admin_identity(conn,request))
+    profile=admin_identity(conn,request)
+    data=dashboard(conn,profile)
+    data["central_lhdn"]=central_lhdn.configuration_status()
+    return data
 
 @api.get("/admin/companies")
 def admin_companies(request:Request,conn=Depends(db)):
@@ -316,6 +322,20 @@ def admin_links(request:Request,conn=Depends(db)):
     conn.execute("SET TRANSACTION READ ONLY")
     admin_identity(conn,request)
     return link_inventory(conn)
+
+class LhdnConnectionBody(BaseModel):
+    p_company_id:UUID
+
+@api.post("/lhdn/connection")
+def lhdn_connection(body:LhdnConnectionBody,request:Request,conn=Depends(db)):
+    profile=identity(conn,request)
+    owner_company(conn,profile,body.p_company_id,lock=True)
+    require_cutover()
+    if request.headers.get("origin")!="https://myrinvoice.com":
+        raise HTTPException(403,"Origin rejected")
+    row=conn.execute("SELECT tin,data->>'brn' FROM myr_native.companies WHERE id=%s",(body.p_company_id,)).fetchone()
+    if not row:raise HTTPException(404,"Company unavailable")
+    return central_lhdn.check_connection(body.p_company_id,row[0],row[1])
 
 class AdminCompanyBody(BaseModel):
     p_company_id:UUID
