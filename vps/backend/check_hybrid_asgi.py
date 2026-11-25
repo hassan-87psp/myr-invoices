@@ -113,6 +113,18 @@ def main():
                 assert conn.execute("SELECT version FROM myr_native.companies WHERE id=%s",(real,)).fetchone()[0]==1
                 assert conn.execute("SELECT version FROM myr_native.companies WHERE id=%s",(cid,)).fetchone()[0]==8
                 assert conn.execute("SELECT count(*) FROM myr_native.audit_logs WHERE company_id=%s",(cid,)).fetchone()[0]==7
+                team={"p_company_id":str(cid),"p_operation":"invite","p_email":"test-staff-"+uid.hex+"@example.invalid","p_role":"Invoice Staff"}
+                assert call("/hybrid/test-team",team)["version"]==9
+                assert call("/hybrid/test-team",{**team,"p_operation":"remove"})["version"]==10
+                call("/hybrid/test-onboard",{"p_name":"Extra"},401,None)
+                call("/hybrid/test-onboard",{"p_name":"Extra"},403,"stranger")
+                second=call("/hybrid/test-onboard",{"p_name":"Extra"})["id"]
+                assert call("/hybrid/test-record",rec("customers",{**customer,"id":str(uuid4())},company=second))["version"]==2
+                call("/hybrid/test-onboard",{"p_name":"Third"})
+                call("/hybrid/test-onboard",{"p_name":"Fourth"})
+                call("/hybrid/test-onboard",{"p_name":"Over limit"},409)
+                assert conn.execute("SELECT count(*) FROM myr_native.companies WHERE created_by=%s AND data->>'vpsSyntheticWriteTest'='true'",(uid,)).fetchone()[0]==4
+                print("VPS_SYNTHETIC_ONBOARDING_ASGI_OK")
     finally:
         api.dependency_overrides.pop(db,None)
         conn.rollback()
