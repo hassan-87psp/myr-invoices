@@ -111,7 +111,7 @@ def test():
         conn.execute("INSERT INTO myr_native.users(id,email,email_verified_at,disabled) VALUES(%s,%s,now(),true)",(uid,email))
         conn.execute("INSERT INTO myr_native.companies(id,name,created_by,data) VALUES(%s,'Synthetic payment rollback',%s,%s)",(cid,uid,Jsonb({"products":[product],"invoices":[invoice]})))
         conn.execute("INSERT INTO myr_native.company_members(company_id,email,role,status) VALUES(%s,%s,'Owner','active')",(cid,email))
-        p={"id":"p1","amount":1000,"date":date.today().isoformat(),"method":"Cash","ref":""}
+        p={"id":"p1","amount":1000,"date":datetime.now(ZoneInfo("Asia/Kuala_Lumpur")).date().isoformat(),"method":"Cash","ref":""}
         def pay(x): return add_payment(conn,uid,email,cid,"invoice",x)
         assert pay(p)["version"]==2
         assert pay(p)["existing"] is True
