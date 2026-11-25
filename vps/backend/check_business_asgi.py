@@ -92,6 +92,18 @@ def main():
                 assert call("/team",{**team,"p_operation":"remove"})["version"]==13
             call("/approval",{**approval,"p_version":13},503,"approver")
             assert conn.execute("SELECT version FROM myr_native.companies WHERE id=%s",(cid,)).fetchone()[0]==13
+            call("/team/accept",{},401,None)
+            call("/team/accept",{},503,"staff")
+            with patch.object(b,"require_cutover",lambda:None):
+                assert call("/team/accept",{},200,"stranger")["accepted"]==0
+                assert call("/team",team)["version"]==14
+                assert b.workspace(conn,{"id":staff,"email":staff_email,"is_platform_admin":False})["companies"]==[]
+                assert call("/team/accept",{},200,"staff")["accepted"]==1
+                assert call("/team/accept",{},200,"staff")["accepted"]==0
+                assert str(b.workspace(conn,{"id":staff,"email":staff_email,"is_platform_admin":False})["companies"][0]["id"])==cid
+                assert call("/team",{**team,"p_operation":"remove"})["version"]==16
+                assert b.workspace(conn,{"id":staff,"email":staff_email,"is_platform_admin":False})["companies"]==[]
+            print("MYR_TEAM_INVITATION_ACCEPTANCE_ROLLBACK_OK")
             print("MYR_BUSINESS_TEAM_APPROVAL_ROLLBACK_OK")
     finally:
         b.api.dependency_overrides.pop(b.db,None)
