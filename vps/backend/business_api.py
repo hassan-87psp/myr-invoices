@@ -15,7 +15,7 @@ from hybrid_workspace import verify_user
 from native_record_writes import save_record, WriteRejected
 from native_payment_ops import add_payment, delete_record
 from business_onboarding import create_company, update_profile
-from native_team_workflow import team_change, invoice_workflow
+from native_team_workflow import team_change, invoice_workflow, accept_invites
 from business_admin import admin_company_rows, set_company, link_inventory, dashboard
 from business_links import read_link, submit_link
 import business_native_auth as native
@@ -201,6 +201,12 @@ class ApprovalBody(BaseModel):
     p_invoice_id:str=Field(max_length=128)
     p_version:int
     p_action:str=Field(max_length=16)
+
+@api.post("/team/accept")
+def accept_team(request:Request,conn=Depends(db)):
+    uid,email=verified_identity(request)
+    require_cutover()
+    return run_write(conn,lambda:accept_invites(conn,uid,email))
 
 @api.post("/team")
 def team(body:TeamBody,request:Request,conn=Depends(db)):
