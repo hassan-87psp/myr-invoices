@@ -31,9 +31,9 @@ def begin_signup(conn, email):
     email = normalize_email(email)
     conn.execute("""INSERT INTO myr_native.users(email,disabled)
         VALUES (%s,true) ON CONFLICT(email) DO NOTHING""", (email,))
-    row = conn.execute("""SELECT id,disabled,email_verified_at,password_hash
+    row = conn.execute("""SELECT id,disabled,email_verified_at,password_hash,is_platform_admin
         FROM myr_native.users WHERE email=%s FOR UPDATE""", (email,)).fetchone()
-    if not row or not row[1] or row[2] is not None or row[3] is not None:
+    if not row or not row[1] or row[2] is not None or row[3] is not None or row[4]:
         return None
     return new_token(conn,row[0],"verify_email")
 
@@ -57,12 +57,12 @@ def finish_password(conn,token,password,purpose,name=None):
     if not row:
         return False
     uid=row[0]
-    user=conn.execute("""SELECT disabled,email_verified_at,password_hash
+    user=conn.execute("""SELECT disabled,email_verified_at,password_hash,is_platform_admin
         FROM myr_native.users WHERE id=%s FOR UPDATE""",(uid,)).fetchone()
     if not user:
         return False
-    disabled,verified,old_hash=user
-    if purpose=="verify_email" and (not disabled or verified is not None or old_hash is not None):
+    disabled,verified,old_hash,is_admin=user
+    if purpose=="verify_email" and (not disabled or verified is not None or old_hash is not None or is_admin):
         return False
     if purpose=="reset_password" and (disabled or verified is None or old_hash is None):
         return False

@@ -8,7 +8,7 @@ ADAPTER=r"""
 const myrNativeBase='/api/myr/native/auth/';
 async function myrNativeRequest(path,body){
  const r=await fetch(myrNativeBase+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
- if(!r.ok){const err=new Error(r.status===401?'Invalid credentials or sign-in required':r.status===429?'Too many requests. Try again later.':'Account service unavailable ('+r.status+')');err.status=r.status;throw err}
+ if(!r.ok){const err=new Error(r.status===401?'Invalid credentials or sign-in required':r.status===429?'Too many requests. Try again later.':r.status===400?'Invalid or expired account link. Request a new email.':r.status===503?'Account email or sign-in service temporarily unavailable. Please retry.':'Account service unavailable ('+r.status+')');err.status=r.status;throw err}
  return r.json()
 }
 function myrNativeAuth(client){
@@ -68,7 +68,7 @@ def transform(html):
     html=once(html,"['app','admin','login','signup','r','v'].includes(p[0])","['app','admin','login','signup','auth','r','v'].includes(p[0])")
     html=once(html,"if(p[0]==='login'||p[0]==='signup')return paint(vAuth(p[0]));","if(p[0]==='auth')return paint(myrFinishView(p[1]));if(p[0]==='login'||p[0]==='signup')return paint(vAuth(p[0]));")
     html=once(html,"await SB.auth.signOut();myrDraftClearAll();","const signedOut=await SB.auth.signOut();if(signedOut.error)return toast('Sign-out failed. Retry.','err');myrDraftClearAll();")
-    html=once(html,"Start with the LHDN sandbox. No card required.","New account registration is currently a limited email-delivery pilot.")
+    html=once(html,"Start with the LHDN sandbox. No card required.","Create your account with a secure email verification link. No card required.")
     assert "from:()=>{throw new Error(" in html
     return html
 

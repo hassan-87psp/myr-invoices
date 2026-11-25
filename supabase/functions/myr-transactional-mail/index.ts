@@ -50,10 +50,7 @@ Deno.serve(async req=>{
     data=JSON.parse(new TextDecoder().decode(bytes));
   }catch{return reply(400,{accepted:false});}
   if(!data||typeof data!=="object"||Array.isArray(data))return reply(400,{accepted:false});
-  const rawEvent=data.event;
-  const pilot=typeof rawEvent==="string"&&["pilot_verify_email","pilot_reset_password","pilot_welcome"].includes(rawEvent);
-  if(pilot&&data.recipient!==testRecipient)return reply(403,{accepted:false,code:"PILOT_RECIPIENT_RESTRICTED"});
-  const event=pilot?rawEvent.slice(6):rawEvent;
+  const event=data.event;
   let to:string,subject:string,html:string,text:string;
   const validRecipient=(v:unknown)=>typeof v==="string"&&v.length<=254&&/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(v);
   const previewKeys:Record<string,string>={test_verify:"verify_email",test_reset:"reset_password",test_welcome:"welcome",test:"test"};
@@ -81,12 +78,10 @@ Deno.serve(async req=>{
     to=data.recipient;subject=catalog[event].subject;html=render(event,link,false,details);
     text=catalog[event].body+"\n\n"+Object.entries(details).map(([k,v])=>k.replaceAll("_"," ")+": "+v).join("\n")+(link?"\n\n"+link:"");
   }else if(event==="welcome"){
-    if(!pilot&&Deno.env.get("MYR_ACCOUNT_MAIL_ENABLED")!=="true")return reply(503,{accepted:false,code:"ACCOUNT_MAIL_NOT_RELEASED"});
     if(Object.keys(data).length!==2||!validRecipient(data.recipient))return reply(422,{accepted:false});
     to=data.recipient;subject=catalog.welcome.subject;text=catalog.welcome.body+"\n\n"+origin;html=render("welcome",origin);
   }else{
-    if(!pilot&&Deno.env.get("MYR_ACCOUNT_MAIL_ENABLED")!=="true")return reply(503,{accepted:false,code:"ACCOUNT_MAIL_NOT_RELEASED"});
-    if(typeof event!=="string"||!Object.hasOwn(templates,event)||Object.keys(data).length!==3)return reply(422,{accepted:false});
+    if(typeof event!=="string"||!["verify_email","reset_password"].includes(event)||!Object.hasOwn(templates,event)||Object.keys(data).length!==3)return reply(422,{accepted:false});
     if(!validRecipient(data.recipient)||typeof data.token!=="string"||!/^[A-Za-z0-9_-]{43}$/.test(data.token))return reply(422,{accepted:false});
     to=data.recipient;
     const t=templates[event as keyof typeof templates];subject=catalog[event].subject;

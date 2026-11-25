@@ -77,6 +77,12 @@ def verified_identity(request,conn):
     if conn.execute("""SELECT 1 FROM myr_native.users
         WHERE (id=%s OR email=%s) AND password_hash IS NOT NULL""",(uid,email)).fetchone():
         raise HTTPException(401,"Use native sign-in for this account")
+    if os.environ.get("MYR_PRODUCTION_RELEASE") and native_enabled():
+        # No new Supabase-auth registrations may bypass VPS email verification.
+        if not conn.execute("""SELECT 1 FROM myr_native.users
+            WHERE id=%s AND email=%s AND email_verified_at IS NOT NULL
+            AND password_hash IS NULL""",(uid,email)).fetchone():
+            raise HTTPException(401,"Create an account through MYR Invoice")
     return uid,email
 
 def identity(conn,request):
