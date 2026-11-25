@@ -24,6 +24,45 @@ def admin_company_rows(conn,profile):
             ORDER BY c.created_at DESC,c.id LIMIT 500""")
         return cur.fetchall()
 
+def dashboard(conn,profile):
+    require(profile.get("is_platform_admin") is True,"Platform administrator required")
+    rows=admin_company_rows(conn,profile)
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("""SELECT c.id,
+          (SELECT count(*) FROM myr_native.lhdn_documents d WHERE d.company_id=c.id AND d.status='Submitted') processing,
+          coalesce((SELECT count(*) FROM myr_native.lhdn_documents d WHERE d.company_id=c.id
+              AND d.accepted_at >= date_trunc('month',now() AT TIME ZONE 'Asia/Kuala_Lumpur') AT TIME ZONE 'Asia/Kuala_Lumpur'),0) docs_month,
+          (SELECT max(d.validated_at) FROM myr_native.lhdn_documents d WHERE d.company_id=c.id AND d.status='Valid') last_ok,
+          (SELECT count(*) FROM myr_native.lhdn_events e WHERE e.company_id=c.id AND e.kind='429') rate_limits
+          FROM myr_native.companies c WHERE c.id=ANY(%s)""",([r["id"] for r in rows],))
+        stats={r["id"]:r for r in cur.fetchall()}
+        for r in rows:
+            r.update(stats[r["id"]])
+        cur.execute("""SELECT e.created_at,c.name AS company,e.kind,e.detail
+            FROM myr_native.lhdn_events e JOIN myr_native.companies c ON c.id=e.company_id
+            WHERE c.data->>'vpsSyntheticWriteTest' IS DISTINCT FROM 'true'
+            ORDER BY e.created_at DESC LIMIT 200""")
+        events=cur.fetchall()
+        cur.execute("""SELECT u.email,u.name,u.created_at,
+            (SELECT max(s.created_at) FROM myr_native.sessions s WHERE s.user_id=u.id) last_sign_in_at,
+            (SELECT count(*) FROM myr_native.company_members m JOIN myr_native.companies c ON c.id=m.company_id
+                WHERE m.email=u.email AND m.status='active'
+                AND c.data->>'vpsSyntheticWriteTest' IS DISTINCT FROM 'true') companies,
+            u.is_platform_admin AS is_admin
+            FROM myr_native.users u WHERE u.email NOT LIKE '%@example.invalid'
+            AND NOT EXISTS (SELECT 1 FROM myr_native.audit_logs a WHERE a.actor=u.id AND a.action='staging.admin.create')
+            ORDER BY u.created_at DESC LIMIT 500""")
+        users=cur.fetchall()
+        cur.execute("""SELECT a.created_at,a.actor_email,a.action,a.detail FROM myr_native.audit_logs a
+            LEFT JOIN myr_native.companies c ON c.id=a.company_id
+            WHERE a.action LIKE 'admin.%' AND (a.company_id IS NULL OR
+            c.data->>'vpsSyntheticWriteTest' IS DISTINCT FROM 'true')
+            ORDER BY a.created_at DESC LIMIT 100""")
+        audit=cur.fetchall()
+    return {"rows":rows,"events":events,"users":users,"audit":audit,
+            "usage_basis":"accepted LHDN documents in current Malaysia month",
+            "last_sign_in_basis":"native sessions only"}
+
 def set_company(conn,profile,cid,version,status=None,plan=None):
     require(profile.get("is_platform_admin") is True,"Platform administrator required")
     require(type(version) is int and version>0,"Invalid version")
@@ -78,6 +117,11 @@ def test():
             conn.execute("INSERT INTO myr_native.company_members(company_id,email,role,status) VALUES(%s,%s,'Owner','active')",(c,oe))
         reject(lambda:admin_company_rows(conn,{"is_platform_admin":False}))
         assert cid in [r["id"] for r in admin_company_rows(conn,p)]
+        reject(lambda:dashboard(conn,{"is_platform_admin":False}))
+        d=dashboard(conn,p)
+        assert cid in [r["id"] for r in d["rows"]]
+        assert synth not in [r["id"] for r in d["rows"]]
+        assert all("data" not in r for r in d["rows"])
         assert synth not in [r["id"] for r in admin_company_rows(conn,p)]
         reject(lambda:set_company(conn,p,synth,1,"suspended"))
         assert set_company(conn,p,cid,1,"suspended","Business")["version"]==2
