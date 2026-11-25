@@ -18,9 +18,11 @@ from business_onboarding import create_company, update_profile
 from native_team_workflow import team_change, invoice_workflow
 from business_admin import admin_company_rows, set_company, link_inventory
 from business_links import read_link, submit_link
+import business_native_auth as native
 
 api=FastAPI(title="MYR business API",docs_url=None,redoc_url=None,openapi_url=None)
 WRITE_FLAG=Path.home()/".config/myrinvoice/production-writes-enabled"
+api.include_router(native.router)
 
 def db():
     with connect() as conn:
@@ -108,6 +110,11 @@ def health(conn=Depends(db)):
 def read_workspace(request:Request,conn=Depends(db)):
     conn.execute("SET TRANSACTION READ ONLY")
     return workspace(conn,workspace_identity(conn,request))
+
+@api.get("/native/workspace")
+def native_workspace(request:Request,conn=Depends(db)):
+    conn.execute("SET TRANSACTION READ ONLY")
+    return workspace(conn,native.current(conn,request))
 
 # No production writes exposed yet. These entry points deliberately fail
 # closed while the source remains live, even if a client tries direct requests.
@@ -319,3 +326,4 @@ if candidate.is_dir():
 
 if __name__=="__main__":
     test()
+    native.test()
