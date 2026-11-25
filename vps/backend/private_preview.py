@@ -25,4 +25,10 @@ def admin_summary(request: Request, conn=Depends(db)):
         (SELECT count(*) FROM myr_native.companies WHERE status='active')""").fetchone()
     return dict(zip(("users","companies","active_companies"),row))
 
-import admin_email  # registers private admin-only email routes
+# SMTP and LHDN are delegated to Supabase by the operator.
+# Do not expose or use the previous VPS mail configuration endpoints.
+from app import health as database_health
+
+@api.get("/health")
+def private_health():
+    return database_health()
