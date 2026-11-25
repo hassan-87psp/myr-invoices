@@ -63,6 +63,34 @@ def team_change(conn,uid,email,cid,operation,target,role=None,*,synthetic=True):
     persist(conn,uid,email,cid,version,data,data,"team."+operation,target)
     return version+1
 
+def accept_invites(conn,uid,email):
+    """Accept pending invitations only for the independently verified email."""
+    from business_onboarding import provision
+    # Avoid creating accounts with no invitation and never activate synthetic data.
+    ids=conn.execute("""SELECT c.id FROM myr_native.companies c
+        JOIN myr_native.company_members m ON m.company_id=c.id
+        WHERE m.email=%s AND m.status='invited' AND m.role=ANY(%s)
+        AND c.status='active' AND c.data->>'vpsSyntheticWriteTest' IS DISTINCT FROM 'true'
+        ORDER BY c.id""",(email,list(TEAM_ROLES))).fetchall()
+    if not ids:
+        return {"accepted":0}
+    row=provision(conn,uid,email)
+    require(not row[2],"Platform administrator cannot accept business invitations")
+    require(conn.execute("SELECT email_verified_at IS NOT NULL FROM myr_native.users WHERE id=%s",(uid,)).fetchone()[0],"Verified account required")
+    accepted=0
+    for (cid,) in ids:
+        row=conn.execute("""SELECT version,data FROM myr_native.companies WHERE id=%s
+            AND status='active' AND data->>'vpsSyntheticWriteTest' IS DISTINCT FROM 'true' FOR UPDATE""",(cid,)).fetchone()
+        if not row:
+            continue
+        changed=conn.execute("""UPDATE myr_native.company_members SET status='active'
+            WHERE company_id=%s AND email=%s AND status='invited' AND role=ANY(%s) RETURNING role""",
+            (cid,email,list(TEAM_ROLES))).fetchone()
+        if changed:
+            persist(conn,uid,email,cid,row[0],row[1],row[1],"team.accept",changed[0])
+            accepted+=1
+    return {"accepted":accepted}
+
 def invoice_workflow(conn,uid,email,cid,invoice_id,expected_version,action,*,synthetic=True):
     roles=("Owner","Admin","Accountant","Invoice Staff") if action=="request" else ("Owner","Admin","Approver")
     require(action in ("request","approve","reject"),"Invalid approval action")
