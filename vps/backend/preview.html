@@ -1,0 +1,32 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MYR Invoice — private staging</title>
+<style>body{margin:0;background:#eef2fa;color:#142345;font:15px system-ui,sans-serif}header{background:#101c40;color:white;padding:18px 6%}main{max-width:1000px;margin:30px auto;padding:0 20px}section{background:white;border:1px solid #d6dfef;border-radius:12px;padding:20px;margin:12px 0}h1,h2{margin:0 0 12px}input,button,select{font:inherit;padding:10px;border:1px solid #ccd6eb;border-radius:8px}button{background:#364de8;color:white;cursor:pointer}form{display:flex;flex-wrap:wrap;gap:8px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}.card{background:#f4f6ff;padding:14px;border-radius:8px}.card strong{display:block;font-size:24px}table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:10px;border-bottom:1px solid #e4e9f5}small,p{color:#526587}#message{color:#a21b24}button:disabled{opacity:.5}</style>
+<header><b>MYR Invoice</b> · Native VPS staging · Read-only</header><main>
+<section id="login"><h1>Private staging login</h1><p>Use a separately activated staging account. No live Supabase calls.</p><form id="form"><input id="email" type="email" autocomplete="username" required placeholder="Email"><input id="password" type="password" autocomplete="current-password" required placeholder="Staging password"><button>Sign in</button></form></section>
+<p id="message" role="status"></p><section id="workspace" hidden><h1 id="name">Business data</h1><select id="companies" aria-label="Company"></select> <button id="logout">Sign out</button><div id="content"></div></section></main>
+<script>
+"use strict";
+let token=null;
+const el=id=>document.getElementById(id);
+async function request(path,method="GET",body){
+ const headers={};if(token)headers.Authorization="Bearer "+token;if(body)headers["Content-Type"]="application/json";
+ const res=await fetch(path,{method,headers,body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit"});
+ if(!res.ok)throw new Error("Request failed ("+res.status+")");return res.status===204?null:res.json();
+}
+function add(parent,tag,text){const node=document.createElement(tag);if(text!==undefined)node.textContent=String(text);parent.append(node);return node;}
+function list(value){return Array.isArray(value)?value:[]}
+async function show(){
+ const id=el("companies").value;el("content").replaceChildren();if(!id)return;
+ const co=await request("/companies/"+encodeURIComponent(id)+"/snapshot");
+ el("name").textContent=co.name;const data=co.data||{};
+ const cards=add(el("content"),"div");cards.className="cards";
+ for(const [key,label] of [["invoices","Invoices"],["quotations","Quotations"],["customers","Customers"],["products","Products"]]){
+ const card=add(cards,"div");card.className="card";add(card,"small",label);add(card,"strong",list(data[key]).length);}
+ const table=add(el("content"),"table");const row=add(add(table,"thead"),"tr");for(const s of ["Document","Issue date","Currency","Status"])add(row,"th",s);
+ const body=add(table,"tbody");for(const inv of list(data.invoices)){const tr=add(body,"tr");for(const v of [inv.number||"—",inv.issueDate||"—",inv.currency||"MYR",inv.appStatus||"—"])add(tr,"td",v);}
+ add(el("content"),"p","Read-only migration preview. Invoice editing, production email and LHDN submission are not enabled.");
+}
+function clear(){token=null;el("workspace").hidden=true;el("login").hidden=false;el("content").replaceChildren();el("companies").replaceChildren();}
+el("form").addEventListener("submit",async e=>{e.preventDefault();el("message").textContent="";try{let result=await request("/auth/login","POST",{email:el("email").value,password:el("password").value});token=result.access_token;const companies=await request("/companies");el("companies").replaceChildren();for(const co of companies){const opt=add(el("companies"),"option",co.name);opt.value=co.id;}el("login").hidden=true;el("workspace").hidden=false;await show();}catch(err){clear();el("message").textContent=err.message;}finally{el("password").value="";}});
+el("companies").addEventListener("change",()=>show().catch(e=>{el("message").textContent=e.message;}));
+el("logout").addEventListener("click",async()=>{try{await request("/auth/logout","POST");}catch(e){el("message").textContent=e.message;}finally{clear();}});
+</script></html>
