@@ -16,6 +16,7 @@ from native_record_writes import save_record, WriteRejected
 from native_payment_ops import add_payment, delete_record
 from business_onboarding import create_company, update_profile
 from native_team_workflow import team_change, invoice_workflow
+from business_admin import admin_company_rows, set_company, link_inventory
 
 api=FastAPI(title="MYR business API",docs_url=None,redoc_url=None,openapi_url=None)
 WRITE_FLAG=Path.home()/".config/myrinvoice/production-writes-enabled"
@@ -206,6 +207,35 @@ def admin_summary(conn,profile):
 def admin_overview(request:Request,conn=Depends(db)):
     conn.execute("SET TRANSACTION READ ONLY")
     return admin_summary(conn,identity(conn,request))
+
+def admin_identity(conn,request):
+    profile=identity(conn,request)
+    if not profile["is_platform_admin"]:
+        raise HTTPException(403,"Platform administrator required")
+    return profile
+
+@api.get("/admin/companies")
+def admin_companies(request:Request,conn=Depends(db)):
+    conn.execute("SET TRANSACTION READ ONLY")
+    return admin_company_rows(conn,admin_identity(conn,request))
+
+@api.get("/admin/link-inventory")
+def admin_links(request:Request,conn=Depends(db)):
+    conn.execute("SET TRANSACTION READ ONLY")
+    admin_identity(conn,request)
+    return link_inventory(conn)
+
+class AdminCompanyBody(BaseModel):
+    p_company_id:UUID
+    p_version:int
+    p_status:str|None=None
+    p_plan:str|None=None
+
+@api.post("/admin/company")
+def admin_change(body:AdminCompanyBody,request:Request,conn=Depends(db)):
+    profile=admin_identity(conn,request)
+    require_cutover()
+    return run_write(conn,lambda:set_company(conn,profile,body.p_company_id,body.p_version,body.p_status,body.p_plan))
 
 def test():
     uid,cid,other,synthetic=uuid4(),uuid4(),uuid4(),uuid4()
