@@ -1,3 +1,4 @@
+import { catalog, render } from "./templates.ts";
 import nodemailer from "npm:nodemailer@6.10.1";
 // Dedicated VPS-to-email gateway. No database or Supabase Auth privileges.
 // No tokens, recipient addresses, credentials or provider response bodies logged.
@@ -18,9 +19,6 @@ async function authorized(given:string, expected:string) {
   const a=new Uint8Array(await crypto.subtle.digest("SHA-256",encoder.encode(given)));
   const b=new Uint8Array(await crypto.subtle.digest("SHA-256",encoder.encode(expected)));
   let diff=0; for(let i=0;i<a.length;i++) diff|=a[i]^b[i]; return diff===0;
-}
-function render(title:string, body:string, link:string, button:string, validity:string) {
-  return `<!doctype html><html><body style="margin:0;background:#eef2fa;color:#17254a;font-family:Arial,sans-serif"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:32px 12px"><table role="presentation" width="100%" style="max-width:560px;background:#fff;border:1px solid #dce3ef;border-radius:18px;overflow:hidden"><tr><td style="padding:25px 30px;background:#17254a;color:#fff;font-size:22px;font-weight:bold">MYR<span style="color:#a5b4fc"> Invoice</span></td></tr><tr><td style="padding:30px"><h1 style="font-size:26px;margin:0 0 16px">${title}</h1><p style="line-height:1.65;color:#52617a">${body}</p>${link?'<p style="margin:28px 0"><a href="'+link+'" style="display:inline-block;padding:14px 24px;border-radius:9px;background:#3446df;color:#fff;text-decoration:none;font-weight:bold">'+button+'</a></p><p style="color:#52617a;font-size:13px">This secure link expires in '+validity+'. If you did not request it, ignore this email.</p>':''}<hr style="border:0;border-top:1px solid #e4e9f5;margin:26px 0"><p style="font-size:12px;color:#67738b">MYR Invoice · Automated notification<br>myrinvoice.com</p></td></tr></table></td></tr></table></body></html>`;
 }
 Deno.serve(async req=>{
   if(req.method!=="POST")return reply(405,{accepted:false});
@@ -44,33 +42,27 @@ Deno.serve(async req=>{
   if(!data||typeof data!=="object"||Array.isArray(data))return reply(400,{accepted:false});
   const event=data.event;
   let to:string,subject:string,html:string,text:string;
-  const welcome=["Welcome to MYR Invoice","Welcome aboard","Your email is verified. Sign in to create invoices and manage your business."] as const;
   const validRecipient=(v:unknown)=>typeof v==="string"&&v.length<=254&&/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(v);
-  if(["test_verify","test_reset","test_welcome"].includes(event)){
-    if(Object.keys(data).length!==1)return reply(422,{accepted:false});
-    to=testRecipient;
-    const t=event==="test_verify"?templates.verify_email:event==="test_reset"?templates.reset_password:welcome;
-    subject="[Preview] "+t[0];
-    text=t[2]+"\n\nDelivery preview only. No account was created or changed.";
-    html=render(t[1],text,"","","");
+  const previewKeys:Record<string,string>={test_verify:"verify_email",test_reset:"reset_password",test_welcome:"welcome",test:"test"};
+  if(typeof event==="string"&&(Object.hasOwn(previewKeys,event)||event==="test_template")){
+    const key=event==="test_template"?data.template:previewKeys[event];
+    if(typeof key!=="string"||!Object.hasOwn(catalog,key)||Object.keys(data).length!==(event==="test_template"?2:1))return reply(422,{accepted:false});
+    const t=catalog[key];to=testRecipient;subject="[Preview] "+t.subject;
+    text=t.body+"\n\nDelivery preview only. No account was created or changed.";
+    html=render(key,"",true);
   }else if(event==="welcome"){
     if(Deno.env.get("MYR_ACCOUNT_MAIL_ENABLED")!=="true")return reply(503,{accepted:false,code:"ACCOUNT_MAIL_NOT_RELEASED"});
     if(Object.keys(data).length!==2||!validRecipient(data.recipient))return reply(422,{accepted:false});
-    to=data.recipient;subject=welcome[0];text=welcome[2];html=render(welcome[1],text,"","","");
-  }else if(event==="test"){
-    if(Object.keys(data).length!==1)return reply(422,{accepted:false});
-    to=testRecipient;subject="MYR Invoice — Email connection test";
-    text="Your MYR Invoice email delivery connection is being tested. No account action is requested.";
-    html=render("Email connection test",text,"","","");
+    to=data.recipient;subject=catalog.welcome.subject;text=catalog.welcome.body+"\n\n"+origin;html=render("welcome",origin);
   }else{
     if(Deno.env.get("MYR_ACCOUNT_MAIL_ENABLED")!=="true")return reply(503,{accepted:false,code:"ACCOUNT_MAIL_NOT_RELEASED"});
-    if(!Object.prototype.hasOwnProperty.call(templates,event)||Object.keys(data).length!==3)return reply(422,{accepted:false});
-    if(typeof data.recipient!=="string"||data.recipient.length>254||!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(data.recipient)||typeof data.token!=="string"||!/^[A-Za-z0-9_-]{43}$/.test(data.token))return reply(422,{accepted:false});
+    if(typeof event!=="string"||!Object.hasOwn(templates,event)||Object.keys(data).length!==3)return reply(422,{accepted:false});
+    if(!validRecipient(data.recipient)||typeof data.token!=="string"||!/^[A-Za-z0-9_-]{43}$/.test(data.token))return reply(422,{accepted:false});
     to=data.recipient;
-    const t=templates[event as keyof typeof templates];subject=t[0];
+    const t=templates[event as keyof typeof templates];subject=catalog[event].subject;
     const link=origin+"/#/auth/"+t[4]+"?token="+encodeURIComponent(data.token);
-    html=render(t[1],t[2],link,t[3],t[5]);
-    text=t[2]+"\n\n"+link+"\n\nExpires in "+t[5]+". Ignore if not requested.";
+    html=render(event,link);
+    text=catalog[event].body+"\n\n"+link+"\n\n"+catalog[event].notice+" Ignore if not requested.";
   }
   try{
     const transport=nodemailer.createTransport({
