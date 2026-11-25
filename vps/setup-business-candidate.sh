@@ -16,6 +16,7 @@ print("MYR_BUSINESS_FRONTEND_JS_OK")
 PYCODE
 "$PY" -B vps/backend/check_business_asgi.py
 "$PY" -B vps/backend/business_admin.py
+"$PY" -B vps/backend/business_links.py
 bash vps/install-business-api.sh
 base=http://127.0.0.1:8766
 curl -fsS --max-time 10 "$base/candidate/" | grep -F 'PRIVATE VPS DATABASE CANDIDATE' >/dev/null
