@@ -20,10 +20,17 @@ def admin_summary(request: Request, conn=Depends(db)):
     _,_,_,admin=identity(conn,request)
     if not admin:
         raise HTTPException(403,"Platform administrator required")
-    row=conn.execute("""SELECT (SELECT count(*) FROM myr_native.users),
-        (SELECT count(*) FROM myr_native.companies),
-        (SELECT count(*) FROM myr_native.companies WHERE status='active')""").fetchone()
-    return dict(zip(("users","companies","active_companies"),row))
+    row=conn.execute("""SELECT
+        (SELECT count(*) FROM myr_native.users),
+        count(*) FILTER (WHERE data->>'vpsSyntheticWriteTest' IS DISTINCT FROM 'true'),
+        count(*) FILTER (WHERE status='active' AND data->>'vpsSyntheticWriteTest' IS DISTINCT FROM 'true'),
+        count(*) FILTER (WHERE data->>'vpsSyntheticWriteTest'='true'),
+        coalesce(sum(CASE WHEN jsonb_typeof(data->'invoices')='array' THEN jsonb_array_length(data->'invoices') ELSE 0 END)
+          FILTER (WHERE data->>'vpsSyntheticWriteTest' IS DISTINCT FROM 'true'),0),
+        coalesce(sum(CASE WHEN jsonb_typeof(data->'customers')='array' THEN jsonb_array_length(data->'customers') ELSE 0 END)
+          FILTER (WHERE data->>'vpsSyntheticWriteTest' IS DISTINCT FROM 'true'),0)
+        FROM myr_native.companies""").fetchone()
+    return dict(zip(("users","companies","active_companies","test_companies","business_invoices","business_customers"),row))
 
 # SMTP and LHDN are delegated to Supabase by the operator.
 # Do not expose or use the previous VPS mail configuration endpoints.
