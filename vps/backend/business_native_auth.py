@@ -11,6 +11,7 @@ from urllib.request import Request as URLRequest,build_opener,HTTPRedirectHandle
 import json
 from fastapi import APIRouter,Depends,HTTPException,Request,Response
 from pydantic import BaseModel,Field
+from fastapi.responses import HTMLResponse
 from app import connect
 from native_auth import authenticate,issue_session,session_user,revoke_session,digest,hash_password
 from account_lifecycle import normalize_email,begin_signup,begin_reset,finish_password,new_token
@@ -206,6 +207,12 @@ def reset_password(body:FinishBody,request:Request,conn=Depends(db)):
 @router.post("/activate")
 def activate(body:FinishBody,request:Request,conn=Depends(db)):
     return complete(body,request,conn,"activate_import")
+
+@router.get("/preview",response_class=HTMLResponse)
+def preview():
+    return HTMLResponse(Path(__file__).with_name("native_auth_preview.html").read_text(),
+        headers={"Cache-Control":"no-store","Referrer-Policy":"no-referrer",
+                 "X-Frame-Options":"DENY","Content-Security-Policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"})
 
 def test():
     uid,admin=uuid4(),uuid4()
