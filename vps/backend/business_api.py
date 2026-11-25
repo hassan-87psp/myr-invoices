@@ -16,7 +16,7 @@ from native_record_writes import save_record, WriteRejected
 from native_payment_ops import add_payment, delete_record
 from business_onboarding import create_company, update_profile
 from native_team_workflow import team_change, invoice_workflow
-from business_admin import admin_company_rows, set_company, link_inventory
+from business_admin import admin_company_rows, set_company, link_inventory, dashboard
 from business_links import read_link, submit_link
 import business_native_auth as native
 
@@ -80,7 +80,8 @@ def workspace(conn,profile):
         return {"profile":profile,"companies":[],"members":[],"documents":[],"links":[],
                 "mode":"native_candidate","writes_enabled":False}
     if profile["is_platform_admin"]:
-        raise HTTPException(403,"Business owner required")
+        return {"profile":profile,"companies":[],"members":[],"documents":[],"links":[],
+                "mode":"native_candidate","writes_enabled":False}
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute("""SELECT c.id,c.name,c.tin,c.plan,c.status,c.version,c.data,c.created_at
             FROM myr_native.companies c JOIN myr_native.company_members m ON m.company_id=c.id
@@ -236,6 +237,11 @@ def admin_identity(conn,request):
     if not profile["is_platform_admin"]:
         raise HTTPException(403,"Platform administrator required")
     return profile
+
+@api.get("/admin/dashboard")
+def admin_dashboard(request:Request,conn=Depends(db)):
+    conn.execute("SET TRANSACTION READ ONLY")
+    return dashboard(conn,admin_identity(conn,request))
 
 @api.get("/admin/companies")
 def admin_companies(request:Request,conn=Depends(db)):
