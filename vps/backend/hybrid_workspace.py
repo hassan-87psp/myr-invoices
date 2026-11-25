@@ -59,7 +59,9 @@ def verify_user(token):
         raise HTTPException(403,"Verified email account required") from None
 
 def workspace(conn,uid,email):
-    # Separate explicit operator grant; native password login remains disabled.
+    # Separate explicit operator grant; imported native password login remains disabled.
+    # The disabled column governs native password auth, not verified Supabase access.
+    # Remove the grant file to revoke hybrid preview access.
     if not GRANT.is_file():
         raise HTTPException(403,"Hybrid staging access has not been authorized")
     try:
@@ -70,7 +72,7 @@ def workspace(conn,uid,email):
         raise HTTPException(403,"Account is not approved for this private preview")
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute("""SELECT id,email,name FROM myr_native.users
-            WHERE id=%s AND email=%s AND email_verified_at IS NOT NULL AND NOT is_platform_admin AND NOT disabled""",(uid,email))
+            WHERE id=%s AND email=%s AND email_verified_at IS NOT NULL AND NOT is_platform_admin""",(uid,email))
         profile=cur.fetchone()
         if not profile:
             raise HTTPException(403,"Imported identity does not match")
