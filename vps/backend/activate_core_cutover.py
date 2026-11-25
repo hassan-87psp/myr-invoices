@@ -139,6 +139,34 @@ def safe_db_error(exc):
     code=getattr(exc,"sqlstate",None)
     return "SQLSTATE_"+code if code and re.fullmatch(r"[A-Z0-9]{5}",code) else "UNCLASSIFIED_DATABASE_ERROR"
 
+def public_probe():
+    # Fresh TLS connection per attempt; allow nginx reload to settle. Never print body/credentials.
+    https=["curl","--noproxy","*","--resolve","myrinvoice.com:443:127.0.0.1","--max-time","5"]
+    with tempfile.TemporaryDirectory(dir=HOME,prefix=".myr-probe-") as tmp:
+        body=Path(tmp)/"body"
+        def probe(path,payload=None):
+            args=[*https,"-sS","-o",str(body),"-w","%{http_code}"]
+            if payload is not None:
+                args+=["-H","Content-Type: application/json","-d",json.dumps(payload)]
+            status=out(*args,"https://myrinvoice.com/api/myr/"+path)
+            try: detail=json.loads(body.read_text()).get("detail")
+            except (ValueError,AttributeError): detail=None
+            return status,detail
+        for attempt in range(8):
+            status,detail=probe("workspace")
+            if status=="401" and detail=="Authentication required":
+                break
+            time.sleep(1)
+        print("MYR_PUBLIC_WORKSPACE_HTTP",status,flush=True)
+        check(status=="401" and detail=="Authentication required","Public API workspace not reaching authorized backend; HTTP "+status)
+        status,detail=probe("links/read",{"p_token":"0"*32})
+        print("MYR_PUBLIC_WRITE_GATE_HTTP",status,flush=True)
+        check(status=="503","Public link gate must remain closed before activation")
+        status,_=probe("native/auth/preview")
+        print("MYR_PRIVATE_ROUTE_HTTP",status,flush=True)
+        check(status=="404","Private route exposed")
+    print("MYR_PUBLIC_ROUTING_PREFLIGHT_OK",flush=True)
+
 def main():
     os.umask(0o077)
     check(out("id","-un")=="myradmin","Run as myradmin")
@@ -233,6 +261,14 @@ def main():
             smoke(False)
             check(local_http("/workspace")[0]==401,"Unauthenticated workspace not rejected")
             check(local_http("/links/read",{"p_token":"0"*32})[0]==503,"Public gate not closed")
+            # Prove the public routing BEFORE freezing or changing any source data.
+            phase="public_routing_preflight"
+            run("sudo","cp","-a",CONF,CONF+".pre-vps-core-"+commit[:12])
+            changed_config=True
+            run("sudo","install","-m","0644",new_conf,CONF)
+            run("sudo","nginx","-t")
+            run("sudo","systemctl","reload","nginx")
+            public_probe()
             phase="source_connect"
             source=source_connection(pw)
             pw=None
@@ -258,21 +294,14 @@ def main():
             stopped_timer=True
             run("systemctl","--user","disable","--now","myr-static-deploy.timer")
             run("systemctl","--user","stop","myr-static-deploy.service")
-            # Preserve an independent permanent copy of the prior Nginx configuration.
-            run("sudo","cp","-a",CONF,CONF+".pre-vps-core-"+commit[:12])
-            changed_config=True
-            run("sudo","install","-m","0644",new_conf,CONF)
-            run("sudo","nginx","-t")
+            # Routing was already proved while the source remained writable.
             switch_link(web)
             changed_root=True
             run("sudo","systemctl","reload","nginx")
             https=["curl","--noproxy","*","--resolve","myrinvoice.com:443:127.0.0.1","--max-time","15"]
             page=run(*https,"-fsS","https://myrinvoice.com/",stdout=subprocess.PIPE).stdout
             check(page==(web/"index.html").read_bytes(),"Wrong public website release")
-            status=out(*https,"-sS","-o","/dev/null","-w","%{http_code}","https://myrinvoice.com/api/myr/workspace")
-            check(status=="401","Public API route did not enforce authentication")
-            status=out(*https,"-sS","-o","/dev/null","-w","%{http_code}","https://myrinvoice.com/api/myr/native/auth/preview")
-            check(status=="404","Private route exposed")
+            public_probe()
             run("systemctl","--user","enable","myr-production-core.service")
             # Single irreversible boundary: after this, NEVER auto-thaw source.
             fd=os.open(MARKER,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
