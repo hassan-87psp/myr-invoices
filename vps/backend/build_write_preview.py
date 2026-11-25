@@ -9,12 +9,17 @@ DEST=TARGET.with_name("hybrid-write-website")
 
 def main():
     html=(TARGET/"index.html").read_text()
-    html=once(html,"rpc:blocked};","""rpc:async(name,args)=>{const endpoint={atomic_save_record:'/hybrid/test-record',atomic_add_payment:'/hybrid/test-payment',atomic_delete_record:'/hybrid/test-delete'}[name];if(!endpoint)return blocked();try{const session=(await client.auth.getSession()).data.session;if(!session)throw new Error('Sign in required');const res=await fetch(endpoint,{method:'POST',headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},body:JSON.stringify(args),cache:'no-store'});const data=await res.json();if(!res.ok)throw new Error(typeof data.detail==='string'?data.detail:'Record write rejected');return {data,error:null}}catch(error){return {data:null,error}}}};""")
+    html=once(html,"rpc:blocked};","""rpc:async(name,args)=>{const endpoint={atomic_save_record:'/hybrid/test-record',atomic_add_payment:'/hybrid/test-payment',atomic_delete_record:'/hybrid/test-delete',atomic_save_profile:'/hybrid/test-profile'}[name];if(!endpoint)return blocked();try{const session=(await client.auth.getSession()).data.session;if(!session)throw new Error('Sign in required');const res=await fetch(endpoint,{method:'POST',headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},body:JSON.stringify(args),cache:'no-store'});const data=await res.json();if(!res.ok)throw new Error(typeof data.detail==='string'?data.detail:'Record write rejected');return {data,error:null}}catch(error){return {data:null,error}}}};""")
     html=once(html,"fetch('/hybrid/workspace'","fetch('/hybrid/write-workspace'")
     html=once(html,"result.mode!=='read_only'","result.mode!=='synthetic_write'")
     html=once(html,"function save(){return;/* Read-only preview: no persistence. */","function save(){if(DB.companies.some(c=>c._v&&PUSHED[c.id]!==fnv(JSON.stringify(coBody(c))))){toast('This action is not connected in this rehearsal. Reload to discard local changes.','err');throw new Error('Unsupported rehearsal mutation')}return;/* Block all generic snapshot writes. */")
     html=once(html,"async function cloudPush(){return true;/* Read-only preview: no network writes. */","async function cloudPush(){return !DB.companies.some(c=>c._v&&PUSHED[c.id]!==fnv(JSON.stringify(coBody(c))));/* No generic snapshot writes. */")
     html=once(html,"if(CLOUD&&idx<0&&ED._autoNumber&&ED.number===ED._autoNumber){","if(false&&CLOUD&&idx<0&&ED._autoNumber&&ED.number===ED._autoNumber){")
+    html=once(html,"p_expected:expected\n   });","p_expected:expected,p_auto:idx<0&&!!ED._autoNumber&&ED.number===ED._autoNumber\\n   });")
+    start=html.index("function saveSettings(){")
+    end=html.index("function logoFile(f){",start)
+    html=html[:start]+"""async function saveSettings(){const co=CO();if(!co||!can('Manage Settings')||!(await atomicReady(co)))return;const before=coBody(co);const p={name:val('st-name'),tin:val('st-tin').toUpperCase(),brn:val('st-brn'),sst:val('st-sst')||'NA',ttx:val('st-ttx')||'NA',msic:val('st-msic'),msicDesc:val('st-msicd'),email:val('st-email'),phone:val('st-phone'),addr:{line:val('st-line'),city:val('st-city'),postcode:val('st-post'),state:val('st-state'),country:co.addr?.country||'MYS'}};const {data,error}=await SB.rpc('atomic_save_profile',{p_company_id:co.id,p_version:co._v,p_profile:p});if(error||!data)return toast('Profile not saved: '+(error?.message||'Unknown error'),'err');if(!atomicApply(co,data,before))return;toast('Test profile saved');rerender()}
+"""+html[end:]
     start=html.index("function delProd(id){")
     end=html.index("/* ================= Payments ================= */",start)
     html=html[:start]+"""function delProd(id){const co=CO(),p=co?.products.find(x=>x.id===id);if(!p||!can('Edit Draft'))return toast('Not allowed to delete item','err');confirmBox('Delete test item?','Existing invoices keep their lines.','Delete',()=>vpsDeleteRecord(co,'products',p),true)}
@@ -30,6 +35,7 @@ async function vpsDeleteRecord(co,kind,record){if(CO()?.id!==co.id||!can('Edit D
  if(!result||!result.company_data||!Number.isInteger(result.version)||result.company_data.vpsSyntheticWriteTest!==true)return false;
  if(JSON.stringify(coBody(co))!==JSON.stringify(before)){toast('Record saved; local changes occurred. Reload before continuing.','err');return false}
  for(const k of ['customers','products','invoices'])co[k]=clone(result.company_data[k]||[]);
+ for(const k of ['name','tin','brn','sst','ttx','msic','msicDesc','email','phone','addr'])if(Object.prototype.hasOwnProperty.call(result.company_data,k))co[k]=clone(result.company_data[k]);
  co.nextNo=result.company_data.nextNo;co._v=result.version;
  BASELINES[co.id]=clone(coBody(co));PUSHED[co.id]=fnv(JSON.stringify(coBody(co)));UNSYNCED_CLOUD=false;
  return true;
