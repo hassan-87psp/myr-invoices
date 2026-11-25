@@ -129,3 +129,19 @@ def company_summary(company_id: UUID, request: Request, conn=Depends(db)):
     if not row:
         raise HTTPException(404,"Company unavailable")
     return dict(zip(("id","name","plan","version","role"),(str(row[0]),*row[1:])))
+
+# Only trusted company administrators may retrieve the legacy full JSON snapshot.
+# Other roles get the summary endpoint until field-level data filtering exists.
+@api.get("/companies/{company_id}/snapshot")
+def company_snapshot(company_id: UUID, request: Request, conn=Depends(db)):
+    uid,_,_,_=identity(conn,request)
+    row=conn.execute("""SELECT c.id,c.name,c.tin,c.plan,c.status,c.version,c.data,c.created_at
+        FROM myr_native.users u JOIN myr_native.company_members m ON m.email=u.email
+        JOIN myr_native.companies c ON c.id=m.company_id
+        WHERE u.id=%s AND c.id=%s AND NOT u.disabled AND u.email_verified_at IS NOT NULL
+        AND m.status='active' AND c.status='active' AND m.role IN ('Owner','Admin')""",
+        (uid,company_id)).fetchone()
+    if not row:
+        raise HTTPException(404,"Company unavailable")
+    return dict(zip(("id","name","tin","plan","status","version","data","created_at"),
+                    (str(row[0]),*row[1:])))
