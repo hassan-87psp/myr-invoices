@@ -78,7 +78,7 @@ def workspace(conn,uid,email):
             raise HTTPException(403,"Imported identity does not match")
         cur.execute("""SELECT c.id,c.name,c.tin,c.plan,c.status,c.version,c.data,c.created_at
             FROM myr_native.companies c JOIN myr_native.company_members m ON m.company_id=c.id
-            WHERE m.email=%s AND m.status='active' AND m.role='Owner' AND c.status='active' ORDER BY c.created_at""",(email,))
+            WHERE m.email=%s AND m.status='active' AND m.role='Owner' AND c.status='active' AND c.data->>'vpsSyntheticWriteTest' IS DISTINCT FROM 'true' ORDER BY c.created_at""",(email,))
         companies=cur.fetchall()
         ids=[c["id"] for c in companies]
         if not ids:
