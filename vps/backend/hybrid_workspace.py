@@ -70,7 +70,7 @@ def workspace(conn,uid,email):
         raise HTTPException(403,"Account is not approved for this private preview")
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute("""SELECT id,email,name FROM myr_native.users
-            WHERE id=%s AND email=%s AND email_verified_at IS NOT NULL AND NOT is_platform_admin""",(uid,email))
+            WHERE id=%s AND email=%s AND email_verified_at IS NOT NULL AND NOT is_platform_admin AND NOT disabled""",(uid,email))
         profile=cur.fetchone()
         if not profile:
             raise HTTPException(403,"Imported identity does not match")
