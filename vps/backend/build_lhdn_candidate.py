@@ -28,4 +28,9 @@ def transform(html):
     html=once(html,"ADM={loaded:true,rows:d.rows,events:d.events,users:d.users,audit:d.audit,err:''}","ADM={loaded:true,rows:d.rows,events:d.events,users:d.users,audit:d.audit,central_lhdn:d.central_lhdn,err:''}")
     html=once(html,"function vIntegrationsContent(){const co=CO();const L2=co.lhdn;","function vIntegrationsContent(){return myrCentralCustomer();}\nfunction myrLegacyIntegrationsContent(){const co=CO();const L2=co.lhdn;")
     html=once(html,"head('LHDN API Monitor','Submission health across all companies. External LHDN processing time is separate from app performance.')+","head('LHDN API Monitor','Submission health across all companies. External LHDN processing time is separate from app performance.')+myrCentralAdmin(D)+")
+    # Existing dashboard card: never infer authorization from imported legacy data.
+    html=once(html,"connected=lhdnHealth(co)==='Connected'","connected=false")
+    html=once(html,"LHDN Connection</h3>'+B(lhdnHealth(co))","LHDN Connection</h3>'+B('Authorization pending')")
+    html=once(html,"<dt>Environment</dt><dd>'+(co.lhdn.env==='production'?'Production':'Sandbox (testing)')","<dt>Environment</dt><dd>'+('Production · central intermediary')")
+    html=once(html,"<dt>Last success</dt><dd>'+fmtDT(co.lhdn.lastOk)","<dt>Authorization</dt><dd>'+('Pending verification')")
     return html
