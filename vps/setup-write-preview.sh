@@ -6,6 +6,7 @@ export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 PY="$HOME/myr-venv/bin/python"
 "$PY" -B vps/backend/native_record_writes.py
+"$PY" -B vps/backend/native_payment_ops.py
 bash vps/setup-hybrid-preview.sh
 "$PY" -B vps/backend/hybrid_write_test.py
 "$PY" -B vps/backend/build_write_preview.py
@@ -31,6 +32,8 @@ PYCODE
 fi
 test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8765/hybrid/write-workspace)" = 401
 test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"p_company_id":"00000000-0000-0000-0000-000000000000","p_kind":"customers","p_record":{}}' http://127.0.0.1:8765/hybrid/test-record)" = 401
+test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"p_company_id":"00000000-0000-0000-0000-000000000000","p_invoice_id":"test","p_payment":{}}' http://127.0.0.1:8765/hybrid/test-payment)" = 401
+test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"p_company_id":"00000000-0000-0000-0000-000000000000","p_kind":"products","p_expected":{}}' http://127.0.0.1:8765/hybrid/test-delete)" = 401
 echo "VPS_SYNTHETIC_UI_WRITE_PREVIEW_READY"
 echo "Browser acceptance required: /website-write/; real company data remains read-only at /website/."
-echo "Payments, other mutations, email, LHDN, public HTTPS and cutover remain disabled."
+echo "Other mutations, email, LHDN, public HTTPS and cutover remain disabled."
