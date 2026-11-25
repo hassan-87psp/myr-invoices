@@ -32,3 +32,20 @@ from app import health as database_health
 @api.get("/health")
 def private_health():
     return database_health()
+
+# Private original-UI preview, separate from production and the native admin.
+from fastapi.staticfiles import StaticFiles
+from hybrid_workspace import ORIGIN
+import hybrid_workspace  # registers verified read-only endpoint
+
+@api.middleware("http")
+async def website_headers(request: Request, call_next):
+    response=await call_next(request)
+    if request.url.path.startswith("/website"):
+        response.headers["X-Robots-Tag"]="noindex, nofollow"
+        response.headers["Content-Security-Policy"]="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' "+ORIGIN+"; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; worker-src 'none'"
+        response.headers["Referrer-Policy"]="no-referrer"
+        response.headers["Cache-Control"]="no-store"
+    return response
+
+api.mount("/website",StaticFiles(directory=Path.home()/"myr-staging/hybrid-website",html=True,check_dir=False),name="private_original_ui")
