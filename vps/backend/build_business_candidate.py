@@ -43,6 +43,23 @@ function rmMember(e){confirmBox('Remove member?','This removes company access.',
     # Public capability routes do not use a user bearer token. They still
     # fail closed at the backend until a real cutover is approved.
     html=once(html,"rpc:async(name,args)=>{const endpoint=","""rpc:async(name,args)=>{const publicEndpoint={get_public_link:'/links/read',submit_public_link:'/links/submit'}[name];if(publicEndpoint){try{const payload=structuredClone(args);if(name==='submit_public_link'&&payload.p_payload&&Object.prototype.hasOwnProperty.call(payload.p_payload,'addr')){delete payload.p_payload.at;payload.p_payload.consent=!!document.getElementById('by-ok')?.checked}const res=await fetch(publicEndpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),cache:'no-store'});const data=await res.json();if(!res.ok)throw new Error(typeof data.detail==='string'?data.detail:'Link unavailable');return {data,error:null}}catch(error){return {data:null,error}}}const endpoint=""")
+    # Admin reads now use one authorized aggregate endpoint, not direct tables.
+    start=html.index("async function adminFetch(){")
+    end=html.index("function adminLocal(){",start)
+    html=html[:start]+"""async function adminFetch(){try{const session=(await SB.auth.getSession()).data.session;if(!session)throw new Error('Sign in required');const response=await fetch('/admin/dashboard',{headers:{Authorization:'Bearer '+session.access_token},cache:'no-store'});if(!response.ok)throw new Error('Admin data unavailable ('+response.status+')');const d=await response.json();ADM={loaded:true,rows:d.rows,events:d.events,users:d.users,audit:d.audit,err:''}}catch(err){ADM={loaded:true,rows:[],events:[],users:[],audit:[],err:'Could not load admin data: '+err.message}}if(location.hash.startsWith('#/admin'))route()}
+"""+html[end:]
+    # The old mirror dashboard cannot describe the native canonical store.
+    start=html.index("async function adminLoadParity(){")
+    end=html.index("function vAdmin(",start)
+    html=html[:start]+"""async function adminLoadParity(){PARITY={loaded:true,rows:[],recovery:[],err:'Native database integrity dashboard not released. Use server reconciliation checks.'};if(location.hash.startsWith('#/admin/integrity'))route()}
+"""+html[end:]
+    start=html.index(" if(t==='integrity'){")
+    end=html.index("  const title=",start)
+    html=html[:start]+""" if(t==='integrity'){return adminShell(t,head('Data Integrity','Native VPS database')+'<div class="note w">Native integrity dashboard not released. Use server reconciliation checks.</div>')}
+ if(false&&t==='integrity'){
+"""+html[end:]
+    html=once(html,"const endpoint={atomic_save_record:","const endpoint={admin_set_company:'/admin/company',atomic_save_record:")
+    html=once(html,"SB.rpc('admin_set_company',{p_id:id,p_status:status||null,p_plan:plan||null})","SB.rpc('admin_set_company',{p_company_id:id,p_version:ADM.rows.find(r=>r.id===id)?.version,p_status:status||null,p_plan:plan||null})")
     # Optional same-origin production routing build. Private candidate stays
     # unchanged by default and the API write gate is never opened here.
     prefix=os.environ.get("MYR_BUSINESS_API_PREFIX","")
@@ -50,7 +67,7 @@ function rmMember(e){confirmBox('Remove member?','This removes company access.',
         raise SystemExit("Unapproved API prefix")
     if prefix:
         html=once(html,"fetch('/workspace',","fetch('/api/myr/workspace',")
-        for route in ("/records","/payments","/delete","/profile","/team","/approval","/onboard","/links/read","/links/submit"):
+        for route in ("/records","/payments","/delete","/profile","/team","/approval","/onboard","/links/read","/links/submit","/admin/dashboard","/admin/company"):
             html=once(html,"'"+route+"'","'"+prefix+route+"'")
     # No fallback to the Supabase data API.
     assert "from:()=>{throw new Error(" in html
