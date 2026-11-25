@@ -15,6 +15,7 @@ from hybrid_workspace import verify_user
 from native_record_writes import save_record, WriteRejected
 from native_payment_ops import add_payment, delete_record
 from business_onboarding import create_company, update_profile
+from native_team_workflow import team_change, invoice_workflow
 
 api=FastAPI(title="MYR business API",docs_url=None,redoc_url=None,openapi_url=None)
 WRITE_FLAG=Path.home()/".config/myrinvoice/production-writes-enabled"
@@ -163,6 +164,48 @@ def payments(body:PaymentBody,request:Request,conn=Depends(db)):
 def delete(body:DeleteBody,request:Request,conn=Depends(db)):
     return checked_write(conn,request,body.p_company_id,
         lambda uid,email:delete_record(conn,uid,email,body.p_company_id,body.p_kind,body.p_expected))
+
+class TeamBody(BaseModel):
+    p_company_id:UUID
+    p_operation:str=Field(max_length=16)
+    p_email:str=Field(max_length=254)
+    p_role:str|None=None
+
+class ApprovalBody(BaseModel):
+    p_company_id:UUID
+    p_invoice_id:str=Field(max_length=128)
+    p_version:int
+    p_action:str=Field(max_length=16)
+
+@api.post("/team")
+def team(body:TeamBody,request:Request,conn=Depends(db)):
+    def op(uid,email):
+        version=team_change(conn,uid,email,body.p_company_id,body.p_operation,body.p_email,body.p_role,synthetic=False)
+        return {"version":version,"email_sent":False}
+    return checked_write(conn,request,body.p_company_id,op)
+
+@api.post("/approval")
+def approval(body:ApprovalBody,request:Request,conn=Depends(db)):
+    profile=identity(conn,request)
+    require_cutover()
+    return run_write(conn,lambda:invoice_workflow(conn,profile["id"],profile["email"],
+        body.p_company_id,body.p_invoice_id,body.p_version,body.p_action,synthetic=False))
+
+def admin_summary(conn,profile):
+    if not profile["is_platform_admin"]:
+        raise HTTPException(403,"Platform administrator required")
+    row=conn.execute("""SELECT count(*),
+        count(*) FILTER (WHERE status='active'),
+        count(*) FILTER (WHERE status='suspended'),
+        coalesce(sum(CASE WHEN jsonb_typeof(data->'invoices')='array' THEN jsonb_array_length(data->'invoices') ELSE 0 END),0),
+        coalesce(sum(CASE WHEN jsonb_typeof(data->'customers')='array' THEN jsonb_array_length(data->'customers') ELSE 0 END),0)
+        FROM myr_native.companies WHERE data->>'vpsSyntheticWriteTest' IS DISTINCT FROM 'true'""").fetchone()
+    return dict(zip(("companies","active_companies","suspended_companies","invoices","customers"),row))
+
+@api.get("/admin/summary")
+def admin_overview(request:Request,conn=Depends(db)):
+    conn.execute("SET TRANSACTION READ ONLY")
+    return admin_summary(conn,identity(conn,request))
 
 def test():
     uid,cid,other,synthetic=uuid4(),uuid4(),uuid4(),uuid4()
