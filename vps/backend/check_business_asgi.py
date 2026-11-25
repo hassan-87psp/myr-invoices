@@ -68,8 +68,10 @@ def main():
             assert conn.execute("SELECT version FROM myr_native.companies WHERE id=%s",(cid,)).fetchone()[0]==7
             team={"p_company_id":cid,"p_operation":"invite","p_email":staff_email,"p_role":"Invoice Staff"}
             call("/team",team,503)
-            code,_=asyncio.run(harness.request("GET","/admin/summary",token="owner"))
-            assert code==403
+            try: b.admin_summary(conn,{"is_platform_admin":False})
+            except HTTPException as exc: assert exc.status_code==403
+            else: raise AssertionError("Owner accessed platform summary")
+            assert b.admin_summary(conn,{"is_platform_admin":True})["companies"]>=1
             with patch.object(b,"require_cutover",lambda:None):
                 call("/team",team,409) # Starter already has its only seat.
                 conn.execute("UPDATE myr_native.companies SET plan='Business',data=jsonb_set(jsonb_set(data,'{plan}','\"Business\"'::jsonb),'{approvalRequired}','true'::jsonb) WHERE id=%s",(cid,))
