@@ -40,7 +40,7 @@ def record_rows(data, kind):
     require(len({r["id"] for r in rows}) == len(rows), "Duplicate existing record IDs")
     return rows
 
-def save_record(conn, actor_id, actor_email, company_id, kind, record, expected):
+def save_record(conn, actor_id, actor_email, company_id, kind, record, expected, automatic=False):
     """One authorized transaction; caller must supply a VERIFIED identity.
 
     Only upserts ordinary customer/product records and unpaid, unsubmitted
@@ -79,6 +79,15 @@ def save_record(conn, actor_id, actor_email, company_id, kind, record, expected)
         require(not old or (old.get("appStatus") in ("Draft", "Ready") and not old.get("payments") and not old.get("share")
             and (old.get("lhdn") or {}).get("status", "Not Submitted") == "Not Submitted"), "Existing invoice is protected")
         require(conn.execute("SELECT 1 FROM myr_native.lhdn_documents WHERE company_id=%s AND invoice_id=%s",(company_id,rid)).fetchone() is None, "Official invoice is protected")
+        if automatic and old is None:
+            prefix, counter = data.get("prefix","INV-"), data.get("nextNo",1001)
+            require(isinstance(prefix,str) and 0<len(prefix)<=60 and type(counter) is int and 0<counter<10**12,"Invalid invoice counter")
+            used={str(r.get("number","")).strip().casefold() for r in rows}
+            while (prefix+str(counter)).casefold() in used:
+                counter+=1
+                require(counter<10**12,"Invoice counter exhausted")
+            rec["number"]=prefix+str(counter)
+            data["nextNo"]=counter
         n = rec.get("number")
         require(isinstance(n,str) and 0 < len(n.strip()) <= 80, "Invoice number required")
         require(not any(r["id"] != rid and str(r.get("number","")).strip().casefold() == n.strip().casefold() for r in rows), "Duplicate invoice number")
@@ -156,6 +165,9 @@ def test():
         assert conn.execute("SELECT count(*) FROM myr_native.company_revisions WHERE company_id=%s",(cid,)).fetchone()[0]==4
         assert conn.execute("SELECT count(*) FROM myr_native.audit_logs WHERE company_id=%s",(cid,)).fetchone()[0]==4
         assert conn.execute("SELECT version FROM myr_native.companies WHERE id=%s",(cid,)).fetchone()[0]==5
+        conn.execute("UPDATE myr_native.company_members SET role='Owner' WHERE company_id=%s AND email=%s",(cid,email))
+        auto=save_record(conn,uid,email,cid,"invoices",{**invoice,"id":str(uuid4())},None,True)
+        assert auto["record"]["number"]=="TEST-2" and auto["company_data"]["nextNo"]==3
     finally:
         conn.rollback()
         conn.close()
