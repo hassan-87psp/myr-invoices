@@ -88,6 +88,8 @@ function myrRevokeShare(id){const co=CO();confirmBox('Revoke customer link?','Th
 async function qrReject(id){if(await vpsLinkOp(CO(),'qr_decline',{id})){closeModal();rerender()}}
 """+html[end:]
     html=once(html,"data.data?'Received':'Open'","data.meta?.received?'Received':'Open'")
+    html=once(html," if(r.status==='Approved')return wrap("," if(r.status==='Received')return wrap(\x60<div class=\"card\">${empty('check','Details already received','Contact the seller if your details need correction.')}</div>\x60);\n if(r.status==='Approved')return wrap(")
+    html=once(html,"They will issue your e-Invoice and it will be emailed to ${esc(d.email)}.","The seller can review your request and issue your e-Invoice.")
     # Optional same-origin production routing build. Private candidate stays
     # unchanged by default and the API write gate is never opened here.
     prefix=os.environ.get("MYR_BUSINESS_API_PREFIX","")

@@ -233,6 +233,9 @@ def main():
             subprocess.run(["systemctl","--user","disable","--now","myr-production-core.service"],check=False)
             UNIT.unlink(missing_ok=True)
             subprocess.run(["systemctl","--user","daemon-reload"],check=False)
+            # Remove only this attempt’s pinned release directories after successful pre-write rollback.
+            shutil.rmtree(prod)
+            shutil.rmtree(web)
             print("MYR_CORE_CUTOVER_STOPPED_BEFORE_WRITES; previous source retained. Reason:",type(exc).__name__,flush=True)
             if isinstance(exc,RuntimeError): print(str(exc),flush=True)
             raise SystemExit(1) from None
