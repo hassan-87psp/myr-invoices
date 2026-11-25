@@ -17,6 +17,7 @@ from native_payment_ops import add_payment, delete_record
 from business_onboarding import create_company, update_profile
 from native_team_workflow import team_change, invoice_workflow
 from business_admin import admin_company_rows, set_company, link_inventory
+from business_links import read_link, submit_link
 
 api=FastAPI(title="MYR business API",docs_url=None,redoc_url=None,openapi_url=None)
 WRITE_FLAG=Path.home()/".config/myrinvoice/production-writes-enabled"
@@ -48,16 +49,16 @@ def identity(conn,request):
     # external identity authority; native password login is not exposed here.
     return dict(zip(("id","email","name","is_platform_admin"),row))
 
-def owner_company(conn,profile,cid,lock=False):
+def owner_company(conn,profile,cid,lock=False,roles=('Owner',)):
     if profile["is_platform_admin"]:
         raise HTTPException(403,"Business owner required")
     sql="""SELECT c.id FROM myr_native.companies c JOIN myr_native.company_members m
         ON m.company_id=c.id WHERE c.id=%s AND c.status='active'
         AND c.data->>'vpsSyntheticWriteTest' IS DISTINCT FROM 'true'
-        AND m.email=%s AND m.role='Owner' AND m.status='active'"""
+        AND m.email=%s AND m.role=ANY(%s) AND m.status='active'"""
     if lock:
         sql+=" FOR UPDATE OF c FOR SHARE OF m"
-    if not conn.execute(sql,(cid,profile["email"])).fetchone():
+    if not conn.execute(sql,(cid,profile["email"],list(roles))).fetchone():
         raise HTTPException(404,"Company unavailable")
 
 def workspace(conn,profile):
@@ -95,9 +96,9 @@ def read_workspace(request:Request,conn=Depends(db)):
 
 # No production writes exposed yet. These entry points deliberately fail
 # closed while the source remains live, even if a client tries direct requests.
-def checked_write(conn,request,cid,operation):
+def checked_write(conn,request,cid,operation,roles=('Owner',)):
     profile=identity(conn,request)
-    owner_company(conn,profile,cid,lock=True)
+    owner_company(conn,profile,cid,lock=True,roles=roles)
     require_cutover()
     return run_write(conn,lambda:operation(profile["id"],profile["email"]))
 
@@ -154,17 +155,17 @@ class DeleteBody(BaseModel):
 @api.post("/records")
 def records(body:RecordBody,request:Request,conn=Depends(db)):
     return checked_write(conn,request,body.p_company_id,
-        lambda uid,email:save_record(conn,uid,email,body.p_company_id,body.p_kind,body.p_record,body.p_expected,body.p_auto))
+        lambda uid,email:save_record(conn,uid,email,body.p_company_id,body.p_kind,body.p_record,body.p_expected,body.p_auto),roles=("Owner","Admin","Accountant","Invoice Staff"))
 
 @api.post("/payments")
 def payments(body:PaymentBody,request:Request,conn=Depends(db)):
     return checked_write(conn,request,body.p_company_id,
-        lambda uid,email:add_payment(conn,uid,email,body.p_company_id,body.p_invoice_id,body.p_payment))
+        lambda uid,email:add_payment(conn,uid,email,body.p_company_id,body.p_invoice_id,body.p_payment),roles=("Owner","Admin","Accountant"))
 
 @api.post("/delete")
 def delete(body:DeleteBody,request:Request,conn=Depends(db)):
     return checked_write(conn,request,body.p_company_id,
-        lambda uid,email:delete_record(conn,uid,email,body.p_company_id,body.p_kind,body.p_expected))
+        lambda uid,email:delete_record(conn,uid,email,body.p_company_id,body.p_kind,body.p_expected),roles=("Owner","Admin","Accountant","Invoice Staff"))
 
 class TeamBody(BaseModel):
     p_company_id:UUID
@@ -236,6 +237,27 @@ def admin_change(body:AdminCompanyBody,request:Request,conn=Depends(db)):
     profile=admin_identity(conn,request)
     require_cutover()
     return run_write(conn,lambda:set_company(conn,profile,body.p_company_id,body.p_version,body.p_status,body.p_plan))
+
+class LinkReadBody(BaseModel):
+    p_token:str=Field(min_length=20,max_length=128)
+
+class LinkSubmitBody(LinkReadBody):
+    p_payload:dict
+
+@api.post("/links/read")
+def public_link_read(body:LinkReadBody,conn=Depends(db)):
+    # This anonymous capability endpoint is not released to the public.
+    require_cutover()
+    conn.execute("SET TRANSACTION READ ONLY")
+    try:
+        return read_link(conn,body.p_token)
+    except WriteRejected:
+        raise HTTPException(404,"Link unavailable") from None
+
+@api.post("/links/submit")
+def public_link_submit(body:LinkSubmitBody,conn=Depends(db)):
+    require_cutover()
+    return run_write(conn,lambda:submit_link(conn,body.p_token,body.p_payload))
 
 def test():
     uid,cid,other,synthetic=uuid4(),uuid4(),uuid4(),uuid4()
