@@ -3,6 +3,10 @@
 # no public API proxy, no database migration, no GitHub runner or new secret.
 set -euo pipefail
 umask 022
+if [ -e "$HOME/.config/myrinvoice/production-writes-enabled" ]; then
+    echo "Legacy static deployment disabled after VPS core cutover; use the core frontend installer." >&2
+    exit 1
+fi
 REPO="$HOME/myr-invoices"
 BASE=/var/www/myrinvoice.com/auto
 CONF=/etc/nginx/sites-available/myrinvoice.com
