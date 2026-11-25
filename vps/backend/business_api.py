@@ -79,10 +79,10 @@ def owner_company(conn,profile,cid,lock=False,roles=('Owner',)):
 def workspace(conn,profile):
     if profile.get("onboarding_only"):
         return {"profile":profile,"companies":[],"members":[],"documents":[],"links":[],
-                "mode":"native_candidate","writes_enabled":False}
+                "mode":"native_candidate","writes_enabled":writes_enabled()}
     if profile["is_platform_admin"]:
         return {"profile":profile,"companies":[],"members":[],"documents":[],"links":[],
-                "mode":"native_candidate","writes_enabled":False}
+                "mode":"native_candidate","writes_enabled":writes_enabled()}
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute("""SELECT c.id,c.name,c.tin,c.plan,c.status,c.version,c.data,c.created_at
             FROM myr_native.companies c JOIN myr_native.company_members m ON m.company_id=c.id
@@ -101,12 +101,12 @@ def workspace(conn,profile):
             FROM myr_native.public_links WHERE company_id=ANY(%s)""",(ids,))
         links=cur.fetchall()
     return {"profile":profile,"companies":companies,"members":members,"documents":documents,"links":links,
-            "mode":"native_candidate","writes_enabled":False}
+            "mode":"native_candidate","writes_enabled":writes_enabled()}
 
 @api.get("/health")
 def health(conn=Depends(db)):
     conn.execute("SELECT 1").fetchone()
-    return {"status":"ok","database":"vps","stage":"candidate","writes_enabled":False}
+    return {"status":"ok","database":"vps","stage":"production_core" if writes_enabled() else "candidate","writes_enabled":writes_enabled()}
 
 @api.get("/workspace")
 def read_workspace(request:Request,conn=Depends(db)):
@@ -126,10 +126,23 @@ def checked_write(conn,request,cid,operation,roles=('Owner',)):
     require_cutover()
     return run_write(conn,lambda:operation(profile["id"],profile["email"]))
 
+def writes_enabled():
+    # Only the separately pinned production service can consume the marker.
+    # Candidate services and rollback test processes never open this gate.
+    import os, re, stat
+    release=os.environ.get("MYR_PRODUCTION_RELEASE","")
+    if not re.fullmatch(r"[0-9a-f]{40}",release):
+        return False
+    try:
+        info=WRITE_FLAG.lstat()
+        return (stat.S_ISREG(info.st_mode) and info.st_uid==os.getuid()
+                and not (info.st_mode & 0o077) and WRITE_FLAG.read_text().strip()==release)
+    except OSError:
+        return False
+
 def require_cutover():
-    # Hard gate: no live writes until the source is frozen, verified and
-    # full business functionality has passed acceptance. Never toggle via HTTP.
-    raise HTTPException(503,"Production cutover not released")
+    if not writes_enabled():
+        raise HTTPException(503,"Production cutover not released")
 
 def run_write(conn,operation):
     try:
