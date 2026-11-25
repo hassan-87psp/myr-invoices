@@ -28,7 +28,10 @@ def main():
         actual=dict(zip(("companies","invoices","customers","products","checksum"),row))
         for label,table in (("members","company_members"),("links","public_links"),("audit","audit_logs")):
             actual[label]=conn.execute("SELECT count(*) FROM myr_native."+table+" t JOIN myr_native.companies c ON c.id=t.company_id WHERE c.data->>'vpsSyntheticWriteTest' IS DISTINCT FROM 'true'").fetchone()[0]
-        actual["audit"]+=conn.execute("SELECT count(*) FROM myr_native.audit_logs WHERE company_id IS NULL").fetchone()[0]
+        staging_actions=("staging.admin.create","staging.admin.role_transfer")
+        actual["audit"]+=conn.execute("SELECT count(*) FROM myr_native.audit_logs WHERE company_id IS NULL AND NOT (action=ANY(%s))",(list(staging_actions),)).fetchone()[0]
+        staging_audit=conn.execute("SELECT action,count(*) FROM myr_native.audit_logs WHERE company_id IS NULL AND action=ANY(%s) GROUP BY action ORDER BY action",(list(staging_actions),)).fetchall()
+        print("STAGING_ADMIN_AUDIT_EXCLUDED",json.dumps(staging_audit))
         synthetic=conn.execute("SELECT count(*) FROM myr_native.companies WHERE data->>'vpsSyntheticWriteTest'='true'").fetchone()[0]
         print("REAL_VPS_DATA",json.dumps(actual,default=str))
         print("SYNTHETIC_COMPANIES_EXCLUDED",synthetic)
