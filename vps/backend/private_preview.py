@@ -37,6 +37,7 @@ def private_health():
 from fastapi.staticfiles import StaticFiles
 from hybrid_workspace import ORIGIN
 import hybrid_workspace  # registers verified read-only endpoint
+import hybrid_write_test  # synthetic-only write rehearsal endpoints
 
 @api.middleware("http")
 async def website_headers(request: Request, call_next):
@@ -49,3 +50,5 @@ async def website_headers(request: Request, call_next):
     return response
 
 api.mount("/website",StaticFiles(directory=Path.home()/"myr-staging/hybrid-website",html=True,check_dir=False),name="private_original_ui")
+
+api.mount("/website-write",StaticFiles(directory=Path.home()/"myr-staging/hybrid-write-website",html=True,check_dir=False),name="private_synthetic_write_ui")
