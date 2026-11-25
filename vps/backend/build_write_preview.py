@@ -9,13 +9,26 @@ DEST=TARGET.with_name("hybrid-write-website")
 
 def main():
     html=(TARGET/"index.html").read_text()
-    html=once(html,"rpc:blocked};","""rpc:async(name,args)=>{const endpoint={atomic_save_record:'/hybrid/test-record',atomic_add_payment:'/hybrid/test-payment',atomic_delete_record:'/hybrid/test-delete',atomic_save_profile:'/hybrid/test-profile'}[name];if(!endpoint)return blocked();try{const session=(await client.auth.getSession()).data.session;if(!session)throw new Error('Sign in required');const res=await fetch(endpoint,{method:'POST',headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},body:JSON.stringify(args),cache:'no-store'});const data=await res.json();if(!res.ok)throw new Error(typeof data.detail==='string'?data.detail:'Record write rejected');return {data,error:null}}catch(error){return {data:null,error}}}};""")
+    html=once(html,"rpc:blocked};","""rpc:async(name,args)=>{const endpoint={atomic_save_record:'/hybrid/test-record',atomic_add_payment:'/hybrid/test-payment',atomic_delete_record:'/hybrid/test-delete',atomic_save_profile:'/hybrid/test-profile',atomic_team:'/hybrid/test-team',atomic_approval:'/hybrid/test-approval'}[name];if(!endpoint)return blocked();try{const session=(await client.auth.getSession()).data.session;if(!session)throw new Error('Sign in required');const res=await fetch(endpoint,{method:'POST',headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},body:JSON.stringify(args),cache:'no-store'});const data=await res.json();if(!res.ok)throw new Error(typeof data.detail==='string'?data.detail:'Record write rejected');return {data,error:null}}catch(error){return {data:null,error}}}};""")
     html=once(html,"fetch('/hybrid/workspace'","fetch('/hybrid/write-workspace'")
     html=once(html,"result.mode!=='read_only'","result.mode!=='synthetic_write'")
     html=once(html,"function save(){return;/* Read-only preview: no persistence. */","function save(){if(DB.companies.some(c=>c._v&&PUSHED[c.id]!==fnv(JSON.stringify(coBody(c))))){toast('This action is not connected in this rehearsal. Reload to discard local changes.','err');throw new Error('Unsupported rehearsal mutation')}return;/* Block all generic snapshot writes. */")
     html=once(html,"async function cloudPush(){return true;/* Read-only preview: no network writes. */","async function cloudPush(){return !DB.companies.some(c=>c._v&&PUSHED[c.id]!==fnv(JSON.stringify(coBody(c))));/* No generic snapshot writes. */")
     html=once(html,"if(CLOUD&&idx<0&&ED._autoNumber&&ED.number===ED._autoNumber){","if(false&&CLOUD&&idx<0&&ED._autoNumber&&ED.number===ED._autoNumber){")
     html=once(html,"p_expected:expected\n   });","p_expected:expected,p_auto:idx<0&&!!ED._autoNumber&&ED.number===ED._autoNumber\n   });")
+    start=html.index("async function saveInvite(){")
+    end=html.index("function verifyAudit(){",start)
+    html=html[:start]+"""async function vpsTeam(op,email,role){const co=CO();if(!co||!can('Invite Team')||!(await atomicReady(co)))return;if(!email.toLowerCase().endsWith('@example.invalid'))return toast('Use a dummy @example.invalid address.','err');const {data,error}=await SB.rpc('atomic_team',{p_company_id:co.id,p_operation:op,p_email:email,p_role:role||null});if(error||!data)return toast(error?.message||'Team action rejected','err');try{await cloudLoad();closeModal();rerender();toast('Test team updated')}catch(e){toast('Saved; reload to refresh team list.','warn')}}
+async function saveInvite(){return vpsTeam('invite',val('iv-e').trim().toLowerCase(),val('iv-r'))}
+async function setRole(e,r){return vpsTeam('role',e,r)}
+function rmMember(e){confirmBox('Remove test member?','No real account is affected.','Remove',()=>vpsTeam('remove',e),true)}
+"""+html[end:]
+    start=html.index("async function markReady(id){")
+    end=html.index("function confirmSubmit(id){",start)
+    html=html[:start]+"""async function vpsApproval(id,action){const co=CO();if(!co||!(await atomicReady(co)))return;const before=coBody(co);const {data,error}=await SB.rpc('atomic_approval',{p_company_id:co.id,p_invoice_id:id,p_version:co._v,p_action:action});if(error||!data)return toast(error?.message||'Approval rejected','err');if(!atomicApply(co,data,before))return;toast('Test workflow: '+data.record.appStatus);rerender()}
+async function markReady(id){return vpsApproval(id,'request')}
+async function approveInv(id){return vpsApproval(id,'approve')}
+"""+html[end:]
     start=html.index("function saveSettings(){")
     end=html.index("function logoFile(f){",start)
     html=html[:start]+"""async function saveSettings(){const co=CO();if(!co||!can('Manage Settings')||!(await atomicReady(co)))return;const before=coBody(co);const p={name:val('st-name'),tin:val('st-tin').toUpperCase(),brn:val('st-brn'),sst:val('st-sst')||'NA',ttx:val('st-ttx')||'NA',msic:val('st-msic'),msicDesc:val('st-msicd'),email:val('st-email'),phone:val('st-phone'),addr:{line:val('st-line'),city:val('st-city'),postcode:val('st-post'),state:val('st-state'),country:co.addr?.country||'MYS'}};const {data,error}=await SB.rpc('atomic_save_profile',{p_company_id:co.id,p_version:co._v,p_profile:p});if(error||!data)return toast('Profile not saved: '+(error?.message||'Unknown error'),'err');if(!atomicApply(co,data,before))return;toast('Test profile saved');rerender()}
