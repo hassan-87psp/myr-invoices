@@ -18,6 +18,7 @@ from business_onboarding import create_company, update_profile
 from native_team_workflow import team_change, invoice_workflow, accept_invites
 from business_admin import admin_company_rows, set_company, link_inventory, dashboard
 from business_links import read_link, submit_link
+from business_link_ops import operate as link_operation
 import business_native_auth as native
 
 api=FastAPI(title="MYR business API",docs_url=None,redoc_url=None,openapi_url=None)
@@ -271,6 +272,18 @@ def admin_change(body:AdminCompanyBody,request:Request,conn=Depends(db)):
     profile=admin_identity(conn,request)
     require_cutover()
     return run_write(conn,lambda:set_company(conn,profile,body.p_company_id,body.p_version,body.p_status,body.p_plan))
+
+class LinkManageBody(BaseModel):
+    p_company_id:UUID
+    p_version:int
+    p_action:str=Field(max_length=32)
+    p_payload:dict
+
+@api.post("/links/manage")
+def manage_link(body:LinkManageBody,request:Request,conn=Depends(db)):
+    return checked_write(conn,request,body.p_company_id,lambda uid,email:link_operation(
+        conn,uid,email,body.p_company_id,body.p_version,body.p_action,body.p_payload),
+        roles=("Owner","Admin","Accountant","Invoice Staff"))
 
 class LinkReadBody(BaseModel):
     p_token:str=Field(min_length=20,max_length=128)

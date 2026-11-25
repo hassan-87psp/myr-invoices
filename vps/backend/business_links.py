@@ -26,6 +26,7 @@ def read_link(conn,token):
     if kind=="qr":
         # A public form must not disclose a previous buyer's identity.
         meta={k:meta[k] for k in ("label","receipt","state") if k in meta}
+        meta["received"]=bool(submits)
         data=None
     else:
         # Existing issued portal snapshot, not a live company database dump.

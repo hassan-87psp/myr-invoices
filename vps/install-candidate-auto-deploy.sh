@@ -42,10 +42,10 @@ deploy() {
     fi
     stage="$(mktemp -d "$BASE/releases/.build.XXXXXXXX")"
     trap 'rm -rf -- "$stage"; rm -f -- "$BASE/.current.$$"' EXIT
-    git -C "$REPO" archive "$commit" vps/backend config.js | tar -xf - -C "$stage"
+    git -C "$REPO" archive "$commit" vps/backend config.js index.html concurrency.js klcc-skyline.webp myr-auth-night.svg pwa-icon-192.png pwa-icon-512.png manifest.webmanifest seo.css | tar -xf - -C "$stage"
     test -z "$(find "$stage" -type l -print -quit)"
     export MYR_CANDIDATE_DIR="$stage/candidate"
-    "$PY" -B "$stage/vps/backend/build_business_candidate.py"
+    "$PY" -B "$stage/vps/backend/build_cutover_check.py"
     "$PY" -B - "$stage/candidate/index.html" <<'PYCODE'
 import re,sys,subprocess
 from pathlib import Path
@@ -53,7 +53,7 @@ for attrs,code in re.findall(r'<script([^>]*)>(.*?)</script>',Path(sys.argv[1]).
     if code.strip() and 'application/ld+json' not in attrs and 'application/json' not in attrs:
         subprocess.run(["node","--check","-"],input=code,text=True,check=True)
 PYCODE
-    for testfile in check_business_asgi.py business_admin.py business_links.py business_api.py; do
+    for testfile in check_business_asgi.py business_admin.py business_links.py business_link_ops.py business_api.py; do
         "$PY" -B "$stage/vps/backend/$testfile"
     done
     unset MYR_CANDIDATE_DIR

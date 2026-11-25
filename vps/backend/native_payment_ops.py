@@ -78,6 +78,12 @@ def add_payment(conn,uid,email,cid,invoice_id,payment):
     updated={**inv,"payments":payments+[safe]}
     data={**previous,"invoices":[updated if r["id"]==invoice_id else r for r in invoices]}
     persist(conn,uid,email,cid,version,previous,data,"payment.record","Invoice "+invoice_id+" payment "+pid)
+    # Keep already-shared customer snapshots current without copying private fields.
+    if inv.get("share"):
+        public_payments=[{k:p[k] for k in ("date","amount","method") if k in p} for p in updated["payments"]]
+        conn.execute("""UPDATE myr_native.public_links SET meta=jsonb_set(jsonb_set(meta,'{invoice,payments}',%s),'{paid}',%s)
+            WHERE company_id=%s AND kind='invoice' AND ref_id=%s AND NOT closed""",
+            (Jsonb(public_payments),Jsonb(sum(p["amount"] for p in updated["payments"])),cid,invoice_id))
     return {"version":version+1,"company_data":data,"invoice":updated,"existing":False}
 
 def delete_record(conn,uid,email,cid,kind,expected):

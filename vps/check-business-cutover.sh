@@ -5,7 +5,7 @@ cd "$HOME/myr-invoices"
 PY="$HOME/myr-venv/bin/python"
 "$PY" -B vps/backend/build_cutover_check.py
 "$PY" -B vps/backend/reconcile_business.py "$@"
-for test in check_business_asgi.py business_admin.py business_links.py business_api.py; do
+for test in check_business_asgi.py business_admin.py business_links.py business_link_ops.py business_api.py; do
   "$PY" -B "vps/backend/$test"
 done
 "$PY" -B - <<'PYCODE'

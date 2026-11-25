@@ -13,7 +13,7 @@ import build_business_candidate as business
 def main():
     root=Path.home()/"myr-staging"
     root.mkdir(mode=0o700,exist_ok=True)
-    target=root/"cutover-check"
+    target=Path(os.environ.get("MYR_CANDIDATE_DIR",str(root/"cutover-check")))
     with tempfile.TemporaryDirectory(dir=root) as tmp:
         base=Path(tmp)
         hybrid.TARGET=base/"hybrid"

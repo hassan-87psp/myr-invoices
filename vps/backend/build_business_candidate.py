@@ -63,6 +63,31 @@ function rmMember(e){confirmBox('Remove member?','This removes company access.',
     # Candidate reads never activate invitations. The write endpoint is invoked
     # only after the workspace explicitly reports production writes enabled.
     html=once(html,"const result=await response.json();if(result.mode!==","let result=await response.json();if(result.writes_enabled===true){const accepted=await fetch('/team/accept',{method:'POST',headers:{Authorization:'Bearer '+session.access_token},cache:'no-store'});if(!accepted.ok)throw new Error('Could not check team invitations');const state=await accepted.json();if(state.accepted>0){const updated=await fetch('/workspace',{headers:{Authorization:'Bearer '+session.access_token},cache:'no-store'});if(!updated.ok)throw new Error('Could not reload team workspace');result=await updated.json()}}if(result.mode!==")
+    # All link changes are typed native transactions, never unrestricted snapshots.
+    html=once(html,"const endpoint={admin_set_company:","const endpoint={link_manage:'/links/manage',admin_set_company:")
+    html=once(html,"if(!inv.share?.token||String(inv.share.exp)<todayStr()){inv.share={token:rid(32),exp:addDays(todayStr(),30)};save()}","if(!(await vpsLinkOp(co,'share',{id})))return;")
+    html=once(html,"  if(!(await syncLinks(co)))return;","  // Link was committed by the native operation.")
+    html=once(html,"const token=inv.share.token;if(!(await myrLinkConfirmed(token,id)))","const token=CO()?.invoices.find(x=>x.id===id)?.share?.token;if(!token||!(await myrLinkConfirmed(token,id)))")
+    html=once(html,"fmtDate(inv.share.exp)","fmtDate(CO().invoices.find(x=>x.id===id).share.exp)")
+    start=html.index("function myrRevokeShare(")
+    end=html.index("/* ================= E-Invoice Centre",start)
+    html=html[:start]+"""async function vpsLinkOp(co,action,payload){if(!co||!can('Edit Draft')||!(await atomicReady(co)))return null;const {data,error}=await SB.rpc('link_manage',{p_company_id:co.id,p_version:co._v,p_action:action,p_payload:payload});if(error||!data){toast(error?.message||'Link operation unavailable','err');return null}try{await cloudLoad();return data}catch(e){toast('Operation saved; reload to view it.','warn');return null}}
+function myrRevokeShare(id){const co=CO();confirmBox('Revoke customer link?','The existing link will stop working.','Revoke',async()=>{if(await vpsLinkOp(co,'revoke',{id})){closeModal();rerender();toast('Link revoked')}},true)}
+"""+html[end:]
+    start=html.index("function qrSave(){")
+    end=html.index("function qrShow(",start)
+    html=html[:start]+"""async function qrSave(){const co=CO(),id=uuid();if(await vpsLinkOp(co,'qr_create',{id,label:val('qr-l')||'QR request',receipt:val('qr-r'),days:+val('qr-x')||7})){rerender();qrShow(id)}}
+"""+html[end:]
+    start=html.index("function qrRegen(")
+    end=html.index("function qrReview(",start)
+    html=html[:start]+"""async function qrRegen(id){if(await vpsLinkOp(CO(),'qr_regenerate',{id})){rerender();qrShow(id)}}
+"""+html[end:]
+    start=html.index("function qrApprove(")
+    end=html.index("function vBuyer(",start)
+    html=html[:start]+"""async function qrApprove(id){const co=CO(),r=co.requests.find(x=>x.id===id),d=await vpsLinkOp(co,'qr_approve',{id});if(!d)return;closeModal();const n=blankInvoice(CO());n.customerId=d.customer_id;n.notes=r.receipt?'Receipt ref: '+r.receipt:'';PREFILL=n;go('#/app/invoices/new')}
+async function qrReject(id){if(await vpsLinkOp(CO(),'qr_decline',{id})){closeModal();rerender()}}
+"""+html[end:]
+    html=once(html,"data.data?'Received':'Open'","data.meta?.received?'Received':'Open'")
     # Optional same-origin production routing build. Private candidate stays
     # unchanged by default and the API write gate is never opened here.
     prefix=os.environ.get("MYR_BUSINESS_API_PREFIX","")
@@ -70,7 +95,7 @@ function rmMember(e){confirmBox('Remove member?','This removes company access.',
         raise SystemExit("Unapproved API prefix")
     if prefix:
         html=html.replace("fetch('/workspace',","fetch('/api/myr/workspace',")
-        for route in ("/records","/payments","/delete","/profile","/team","/team/accept","/approval","/onboard","/links/read","/links/submit","/admin/dashboard","/admin/company"):
+        for route in ("/records","/payments","/delete","/profile","/team","/team/accept","/approval","/onboard","/links/read","/links/submit","/links/manage","/admin/dashboard","/admin/company"):
             html=once(html,"'"+route+"'","'"+prefix+route+"'")
     # No fallback to the Supabase data API.
     assert "from:()=>{throw new Error(" in html
