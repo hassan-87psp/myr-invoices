@@ -16,10 +16,15 @@ from app import connect
 def main():
     uid,other=uuid4(),uuid4()
     email="business-"+uid.hex+"@example.invalid"
+    staff,approver=uuid4(),uuid4()
+    staff_email="staff-"+staff.hex+"@example.invalid"
+    approver_email="approver-"+approver.hex+"@example.invalid"
     conn=connect()
     def verify(token):
         if token=="owner": return uid,email
         if token=="stranger": return other,"stranger-"+other.hex+"@example.invalid"
+        if token=="staff": return staff,staff_email
+        if token=="approver": return approver,approver_email
         raise HTTPException(401,"Test auth rejected")
     def override():
         with conn.transaction():
@@ -61,12 +66,37 @@ def main():
                 assert call("/delete",{"p_company_id":cid,"p_kind":"products","p_expected":product})["version"]==7
             call("/records",record("customers",{"id":"blocked","name":"Blocked"}),503)
             assert conn.execute("SELECT version FROM myr_native.companies WHERE id=%s",(cid,)).fetchone()[0]==7
+            team={"p_company_id":cid,"p_operation":"invite","p_email":staff_email,"p_role":"Invoice Staff"}
+            call("/team",team,503)
+            code,_=asyncio.run(harness.request("GET","/admin/summary",token="owner"))
+            assert code==403
+            with patch.object(b,"require_cutover",lambda:None):
+                call("/team",team,409) # Starter already has its only seat.
+                conn.execute("UPDATE myr_native.companies SET plan='Business',data=jsonb_set(jsonb_set(data,'{plan}','\"Business\"'::jsonb),'{approvalRequired}','true'::jsonb) WHERE id=%s",(cid,))
+                assert call("/team",team)["version"]==8
+                assert call("/team",{**team,"p_email":approver_email,"p_role":"Approver"})["version"]==9
+                for actor,addr in ((staff,staff_email),(approver,approver_email)):
+                    conn.execute("INSERT INTO myr_native.users(id,email,email_verified_at,disabled) VALUES(%s,%s,now(),true)",(actor,addr))
+                # Activate only test fixtures; actual invitations remain pending.
+                conn.execute("UPDATE myr_native.company_members SET status='active' WHERE company_id=%s AND email IN (%s,%s)",(cid,staff_email,approver_email))
+                draft={**invoice,"id":str(uuid4()),"number":"INV-1002","payments":[]}
+                assert call("/records",record("invoices",draft,auto=True))["version"]==10
+                approval={"p_company_id":cid,"p_invoice_id":draft["id"],"p_version":10,"p_action":"request"}
+                assert call("/approval",approval)["record"]["appStatus"]=="Approval Pending"
+                approval={**approval,"p_version":11,"p_action":"approve"}
+                call("/approval",approval,409) # Creator cannot approve own invoice.
+                call("/approval",approval,409,"staff")
+                assert call("/approval",approval,200,"approver")["record"]["appStatus"]=="Ready"
+                assert call("/team",{**team,"p_operation":"remove"})["version"]==13
+            call("/approval",{**approval,"p_version":13},503,"approver")
+            assert conn.execute("SELECT version FROM myr_native.companies WHERE id=%s",(cid,)).fetchone()[0]==13
+            print("MYR_BUSINESS_TEAM_APPROVAL_ROLLBACK_OK")
     finally:
         b.api.dependency_overrides.pop(b.db,None)
         conn.rollback()
         conn.close()
     with connect() as check:
-        assert check.execute("SELECT count(*) FROM myr_native.users WHERE id=%s",(uid,)).fetchone()[0]==0
+        assert check.execute("SELECT count(*) FROM myr_native.users WHERE id=ANY(%s)",([uid,staff,approver],)).fetchone()[0]==0
     print("MYR_BUSINESS_ASGI_ROLLBACK_OK")
     print("Production cutover gate remains closed.")
 
