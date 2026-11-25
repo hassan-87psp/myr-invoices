@@ -15,13 +15,13 @@ function myrNativeAuth(client){
  const legacy=client.auth;
  let nativeActive=false;
  const getSession=async()=>{try{const p=await myrNativeRequest('me');nativeActive=true;return {data:{session:{native:true,user:{id:p.id,email:p.email,user_metadata:{name:p.name}}}},error:null}}
- catch(e){if(![401,404].includes(e.status))return {data:{session:null},error:e};nativeActive=false;return legacy.getSession()}};
+ catch(e){if(![401,404,503].includes(e.status)||(nativeActive&&e.status===503))return {data:{session:null},error:e};nativeActive=false;return legacy.getSession()}};
  return {
  getSession,
  getUser:async()=>{const r=await getSession();return {data:{user:r.data.session?.user||null},error:r.error}},
  signInWithPassword:async({email,password})=>{
   try{await myrNativeRequest('login',{email,password});nativeActive=true;await legacy.signOut({scope:'local'});const r=await getSession();if(!r.data.session?.native)throw new Error('Native session not established');return {data:{session:r.data.session,user:r.data.session.user},error:null}}
-  catch(e){if(!nativeActive&&[401,404].includes(e.status))return legacy.signInWithPassword({email,password});return {data:null,error:e}}},
+  catch(e){if(!nativeActive&&[401,404,503].includes(e.status))return legacy.signInWithPassword({email,password});return {data:null,error:e}}},
  signOut:async()=>{try{if(nativeActive)await myrNativeRequest('logout',{});nativeActive=false;return legacy.signOut({scope:'local'})}catch(e){return {error:e}}},
  onAuthStateChange:(cb)=>legacy.onAuthStateChange((ev,s)=>{if(!nativeActive)cb(ev,s)}),
  signUp:async({email})=>{try{await myrNativeRequest('signup',{email});return {data:{session:null},error:null}}catch(e){return {data:null,error:e}}},
