@@ -16,8 +16,8 @@ backup="$(find "$backup_dir" -maxdepth 1 -type f -name 'native-*.dump.gpg' -prin
 test -n "$backup"
 key="$HOME/.config/myrinvoice/native-backup-key"
 test -f "$key" && test ! -L "$key"
-bin="$(pg_config --bindir)"
-if [ ! -x "$bin/initdb" ]; then
+bin="$(pg_config --bindir 2>/dev/null || true)"
+if [ -z "$bin" ] || [ ! -x "$bin/initdb" ]; then
   bin="$(find /usr/lib/postgresql -mindepth 2 -maxdepth 2 -type d -name bin | sort -V | tail -n1)"
 fi
 for cmd in initdb pg_ctl createdb pg_restore psql; do test -x "$bin/$cmd"; done
