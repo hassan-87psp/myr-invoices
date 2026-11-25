@@ -31,13 +31,18 @@ def test_company(conn, uid, email):
         raise HTTPException(403,"Synthetic test company unavailable")
     return dict(zip(("id","name","tin","plan","status","version","data","created_at"),row))
 
+def members_for_test(conn,cid):
+    with conn.cursor() as cur:
+        cur.execute("SELECT company_id,email,name,role,status,created_at FROM myr_native.company_members WHERE company_id=%s AND status IN ('active','invited') ORDER BY created_at,email",(cid,))
+        return [dict(zip(("company_id","email","name","role","status","created_at"),row)) for row in cur.fetchall()]
+
 @api.get("/hybrid/write-workspace")
 def read_test(request:Request,conn=Depends(db)):
     uid,email=verify_user(bearer(request))
     conn.execute("SET TRANSACTION READ ONLY")
     co=test_company(conn,uid,email)
     return {"profile":{"id":uid,"email":email,"name":"Test owner","is_platform_admin":False},
-       "companies":[co],"members":[{"company_id":co["id"],"email":email,"name":"Test owner","role":"Owner","status":"active","created_at":co["created_at"]}],
+       "companies":[co],"members":members_for_test(conn,co["id"]),
        "documents":[],"links":[],"mode":"synthetic_write"}
 
 class RecordBody(BaseModel):
