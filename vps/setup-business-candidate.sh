@@ -29,5 +29,8 @@ for path in onboard profile; do
  fi
  test "$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d "$data" "$base/$path")" = 401
 done
+test "$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"p_token":"00000000000000000000000000000000"}' "$base/links/read")" = 503
+test "$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"p_token":"00000000000000000000000000000000","p_payload":{}}' "$base/links/submit")" = 503
+echo "MYR_LINK_ROUTES_CUTOVER_GATE_OK"
 echo "MYR_BUSINESS_FRONTEND_CANDIDATE_READY"
 echo "Use SSH forwarding of port 8766. Imported real data read-only. No public deployment or source data changes."
