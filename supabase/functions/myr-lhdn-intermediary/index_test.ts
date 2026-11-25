@@ -1,4 +1,4 @@
-import { createHandler } from "./index.ts";
+import { createHandler } from "./handler.ts";
 const secret="a".repeat(64);
 const values:Record<string,string>={MYR_LHDN_BRIDGE_SECRET:secret,MYR_LHDN_SANDBOX_CLIENT_ID:"mock",MYR_LHDN_SANDBOX_CLIENT_SECRET:"mock-secret"};
 let calls=0;
