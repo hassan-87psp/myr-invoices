@@ -1,10 +1,11 @@
-"""Connection-only taxpayer credential check. No database writes or invoice submission.
+"""Connection-only taxpayer or authorized intermediary credential check. No database writes or invoice submission.
 Credentials and access token stay in process memory; no output of provider response bodies.
 """
 import getpass
 import json
 import sys
 import ssl
+import re
 from urllib.parse import urlencode
 from urllib.request import Request, build_opener, HTTPRedirectHandler, HTTPSHandler, ProxyHandler
 from urllib.error import HTTPError, URLError
@@ -16,16 +17,24 @@ class NoRedirect(HTTPRedirectHandler):
 def main():
     if not sys.stdin.isatty() or not sys.stderr.isatty():
         raise SystemExit("Run interactively in your private VPS terminal.")
-    if sys.argv[1:] not in (["production"], ["sandbox"]):
-        raise SystemExit("Choose production or sandbox explicitly.")
-    env=sys.argv[1]
+    args=sys.argv[1:]
+    if args not in (["production"], ["sandbox"], ["production","intermediary"], ["sandbox","intermediary"]):
+        raise SystemExit("Choose production or sandbox, optionally followed by intermediary.")
+    env=args[0]
+    intermediary=len(args)==2
     base={"production":"https://api.myinvois.hasil.gov.my","sandbox":"https://preprod-api.myinvois.hasil.gov.my"}[env]
-    print("LHDN",env,"connection test only. No invoice will be submitted.",flush=True)
+    print("LHDN",env,"intermediary" if intermediary else "taxpayer","connection test only. No invoice will be submitted.",flush=True)
     client_id=getpass.getpass("Client ID (hidden): ").strip()
     secret=getpass.getpass("Client Secret 1 (hidden): ").strip()
     if not client_id or not secret or len(client_id)>512 or len(secret)>2048:
         raise SystemExit("Missing or invalid credentials.")
-    req=Request(base+"/connect/token",data=urlencode({"client_id":client_id,"client_secret":secret,"grant_type":"client_credentials","scope":"InvoicingAPI"}).encode("ascii"),headers={"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},method="POST")
+    headers={"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"}
+    if intermediary:
+        target=getpass.getpass("Authorized CUSTOMER TIN (or TIN:BRN, hidden): ").strip().upper()
+        if not re.fullmatch(r"[A-Z]{1,3}[0-9]{1,20}(?::[A-Z0-9-]{1,40})?",target):
+            raise SystemExit("Invalid customer TIN or TIN:BRN format.")
+        headers["onbehalfof"]=target
+    req=Request(base+"/connect/token",data=urlencode({"client_id":client_id,"client_secret":secret,"grant_type":"client_credentials","scope":"InvoicingAPI"}).encode("ascii"),headers=headers,method="POST")
     opener=build_opener(ProxyHandler({}),NoRedirect(),HTTPSHandler(context=ssl.create_default_context()))
     try:
         with opener.open(req,timeout=25) as res:
@@ -35,7 +44,7 @@ def main():
             ttl=data.get("expires_in")
             if not isinstance(ttl,int) or isinstance(ttl,bool) or ttl<=0:
                 raise ValueError("Invalid expiration")
-            print("MYR_LHDN_TAXPAYER_LOGIN_OK",env,"HTTP",res.status,"expires_in",ttl,flush=True)
+            print("MYR_LHDN_INTERMEDIARY_LOGIN_OK" if intermediary else "MYR_LHDN_TAXPAYER_LOGIN_OK",env,"HTTP",res.status,"expires_in",ttl,flush=True)
     except HTTPError as exc:
         code="unknown"
         try:
