@@ -13,7 +13,7 @@ def once(text,old,new):
         raise SystemExit("Frontend anchor changed: "+old[:90])
     return text.replace(old,new,1)
 
-def main():
+def main(*,grant=True):
     html=(APP_ROOT/"index.html").read_text()
     html=once(html,"SB=window.supabase.createClient(CFG.supabaseUrl,CFG.supabaseAnonKey);", """const client=window.supabase.createClient(CFG.supabaseUrl,CFG.supabaseAnonKey,{auth:{persistSession:false,detectSessionInUrl:false}});const blocked=async()=>({data:null,error:new Error('Not available in read-only VPS staging')});SB={auth:{getSession:client.auth.getSession.bind(client.auth),getUser:client.auth.getUser.bind(client.auth),signInWithPassword:client.auth.signInWithPassword.bind(client.auth),signOut:()=>client.auth.signOut({scope:'local'}),onAuthStateChange:client.auth.onAuthStateChange.bind(client.auth),signUp:blocked,updateUser:blocked,resetPasswordForEmail:blocked},from:()=>{throw new Error('Direct cloud data access blocked in VPS staging')},rpc:blocked};""")
     start=html.index(" await SB.rpc('accept_invites');",html.index("async function cloudLoad"))
@@ -42,6 +42,8 @@ def main():
         TARGET.mkdir(mode=0o700,exist_ok=True)
         for p in root.iterdir(): os.replace(p,TARGET/p.name)
     print("ORIGINAL_UI_PRIVATE_BUILD_OK")
+    if not grant:
+        return
     with connect() as conn:
         rows=conn.execute("""SELECT DISTINCT u.id,u.email FROM myr_native.users u
             JOIN myr_native.company_members m ON m.email=u.email
