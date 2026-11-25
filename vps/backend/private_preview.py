@@ -24,3 +24,5 @@ def admin_summary(request: Request, conn=Depends(db)):
         (SELECT count(*) FROM myr_native.companies),
         (SELECT count(*) FROM myr_native.companies WHERE status='active')""").fetchone()
     return dict(zip(("users","companies","active_companies"),row))
+
+import admin_email  # registers private admin-only email routes
