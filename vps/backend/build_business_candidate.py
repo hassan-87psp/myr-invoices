@@ -40,6 +40,9 @@ function rmMember(e){confirmBox('Remove member?','This removes company access.',
 """+html[end:]
     html=once(html,"toast('Test workflow: '+data.record.appStatus)","toast('Workflow: '+data.record.appStatus)")
     html=once(html,"toast('Test profile saved')","toast('Profile saved')")
+    # Public capability routes do not use a user bearer token. They still
+    # fail closed at the backend until a real cutover is approved.
+    html=once(html,"rpc:async(name,args)=>{const endpoint=","""rpc:async(name,args)=>{const publicEndpoint={get_public_link:'/links/read',submit_public_link:'/links/submit'}[name];if(publicEndpoint){try{const payload=structuredClone(args);if(name==='submit_public_link'&&payload.p_payload&&Object.prototype.hasOwnProperty.call(payload.p_payload,'addr')){delete payload.p_payload.at;payload.p_payload.consent=!!document.getElementById('by-ok')?.checked}const res=await fetch(publicEndpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),cache:'no-store'});const data=await res.json();if(!res.ok)throw new Error(typeof data.detail==='string'?data.detail:'Link unavailable');return {data,error:null}}catch(error){return {data:null,error}}}const endpoint=""")
     # No fallback to the Supabase data API.
     assert "from:()=>{throw new Error(" in html
     assert "/hybrid/test-" not in html and "/hybrid/write-workspace" not in html
