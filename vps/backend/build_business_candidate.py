@@ -9,7 +9,7 @@ from pathlib import Path
 from build_hybrid_preview import once, APP_ROOT
 from build_write_preview import DEST as SYNTHETIC
 
-TARGET=Path.home()/"myr-staging"/"business-candidate"
+TARGET=Path(os.environ.get("MYR_CANDIDATE_DIR",str(Path.home()/"myr-staging"/"business-candidate")))
 
 def main():
     html=(SYNTHETIC/"index.html").read_text()
