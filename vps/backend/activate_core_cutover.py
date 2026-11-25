@@ -65,6 +65,28 @@ def compare(source,dest):
         check(source.execute("SELECT count(*) FROM cron.job WHERE active").fetchone()[0]==0,"Active source cron jobs; review before cutover")
     print("MYR_EXACT_SOURCE_RECONCILIATION_OK",flush=True)
 
+def pause_reviewed_jobs(source):
+    # Only the explicitly reviewed legacy recurring draft scheduler may be paused.
+    # Job change commits atomically with the business freeze; a rollback restores it.
+    if not source.execute("SELECT to_regclass('cron.job')").fetchone()[0]:
+        return []
+    jobs=source.execute("SELECT jobid,jobname,command FROM cron.job WHERE active ORDER BY jobid").fetchall()
+    for jid,name,command in jobs:
+        check(name=="myr-recurring-drafts" and command.strip()=="select myr_internal.run_recurring_drafts();",
+              "Unreviewed active source cron job; stop before cutover")
+    active=source.execute("""SELECT count(*) FROM public.companies c
+        CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(c.data->'recurring')='array'
+            THEN c.data->'recurring' ELSE '[]'::jsonb END) s
+        WHERE s->>'auto'='true' AND s->>'paused' IS DISTINCT FROM 'true'""").fetchone()[0]
+    check(active==0,"Active recurring schedules require a VPS replacement first")
+    for jid,name,command in jobs:
+        check(source.execute("SELECT count(*) FROM cron.job_run_details WHERE jobid=%s AND status IN ('starting','running','connecting','sending') AND end_time IS NULL",(jid,)).fetchone()[0]==0,
+              "Recurring cron job still running; retry after completion")
+        source.execute("SELECT cron.alter_job(job_id := %s, active := false)",(jid,))
+        check(source.execute("SELECT active FROM cron.job WHERE jobid=%s",(jid,)).fetchone()==(False,),"Could not pause reviewed cron job")
+        print("MYR_LEGACY_RECURRING_JOB_PAUSED_PENDING_COMMIT",flush=True)
+    return [jid for jid,_,_ in jobs]
+
 def switch_link(target):
     tmp=BASE_DIR/(".core-current-"+str(os.getpid()))
     tmp.unlink(missing_ok=True)
@@ -123,7 +145,7 @@ def main():
     check(not MARKER.exists() and not UNIT.exists(),"Existing production activation; do not rerun")
     check(sys.argv[1:]==["--activate-core"],"Use explicit --activate-core only after accepting temporary limits")
     print(LIMITS,flush=True)
-    print("Source business tables become read-only. A verified backup and exact row comparison are required. No auto-thaw once VPS writes open.",flush=True)
+    print("Source business tables become read-only; the reviewed legacy recurring job is paused only if no active schedules exist. A verified backup and exact row comparison are required. No auto-thaw once VPS writes open.",flush=True)
     if input("Type SWITCH CORE to accept these temporary limitations and activate: ").strip()!="SWITCH CORE":
         raise SystemExit("No changes made.")
     # Fail fast on invalid credentials before rebuilding, backing up or changing services.
@@ -203,6 +225,7 @@ def main():
         stopped_timer=False
         opened=False
         source=None
+        paused_jobs=[]
         phase="local_service_start"
         try:
             run("systemctl","--user","daemon-reload")
@@ -219,6 +242,8 @@ def main():
             statements=(REPO/"vps/source-freeze-review.sql").read_text()
             statements=statements.replace("BEGIN;","",1).replace("COMMIT;","",1)
             source.execute(statements,prepare=False)
+            phase="reviewed_cron_pause"
+            paused_jobs=pause_reviewed_jobs(source)
             phase="exact_reconciliation"
             with connect() as dest:
                 dest.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
@@ -270,8 +295,12 @@ def main():
             if source is not None:
                 source.rollback()
                 if frozen:
-                    source.execute((REPO/"vps/source-thaw-review.sql").read_text(),prepare=False)
+                    thaw=(REPO/"vps/source-thaw-review.sql").read_text().replace("BEGIN;","",1).replace("COMMIT;","",1)
+                    source.execute(thaw,prepare=False)
+                    for jid in paused_jobs:
+                        source.execute("SELECT cron.alter_job(job_id := %s, active := true)",(jid,))
                     source.commit()
+                    print("MYR_SOURCE_FREEZE_AND_CRON_RESTORED",flush=True)
             if stopped_timer: run("systemctl","--user","enable","--now","myr-static-deploy.timer")
             subprocess.run(["systemctl","--user","disable","--now","myr-production-core.service"],check=False)
             UNIT.unlink(missing_ok=True)
