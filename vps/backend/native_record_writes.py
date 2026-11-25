@@ -73,6 +73,13 @@ def save_record(conn, actor_id, actor_email, company_id, kind, record, expected,
             require(not rec.get("system") and not (old or {}).get("system"), "System customer is protected")
     else:
         require(rec.get("appStatus") in ("Draft", "Ready"), "Only draft/ready invoices are enabled")
+        if previous.get("approvalRequired") is True:
+            require(rec.get("appStatus")=="Draft","Approval must use the approval workflow")
+            require(not old or old.get("appStatus")=="Draft","Pending or approved invoices cannot be edited directly")
+        for key in ("approvalAction","approvalActor","approvalAt"):
+            rec.pop(key,None)
+            if old and key in old:
+                rec[key]=old[key]
         dtype=rec.get("docType")
         require(dtype in ("01","02","03","04","11","12","13","14"),"Unsupported document type")
         require(not old or old.get("docType")==dtype,"Existing document type cannot change")
