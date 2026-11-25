@@ -90,6 +90,33 @@ def smoke(expected):
         time.sleep(0.5)
     raise RuntimeError("Production service health mismatch")
 
+def source_connection(password):
+    return psycopg.connect(host=HOST,port=5432,dbname="postgres",user="postgres."+PROJECT,
+        password=password,sslmode="verify-full",sslrootcert=str(CA),connect_timeout=10,
+        options="-c statement_timeout=60000")
+
+def safe_db_error(exc):
+    # Classify locally; never print libpq messages that could contain credentials or records.
+    message=str(exc).lower()
+    if "password authentication failed" in message or "invalid password" in message or getattr(exc,"sqlstate",None)=="28P01":
+        return "PASSWORD_REJECTED"
+    if "tenant or user not found" in message or "tenant not found" in message:
+        return "POOLER_TENANT_NOT_FOUND"
+    if any(x in message for x in ("certificate","ssl error","ssl connection","tls")):
+        return "TLS_OR_CERTIFICATE_FAILURE"
+    if any(x in message for x in ("timeout","timed out")):
+        return "CONNECTION_OR_QUERY_TIMEOUT"
+    if any(x in message for x in ("could not translate host","name resolution","name or service not known")):
+        return "DNS_FAILURE"
+    if any(x in message for x in ("connection refused","network is unreachable","no route to host")):
+        return "NETWORK_OR_PORT_FAILURE"
+    if any(x in message for x in ("max client connections","too many connections","circuit breaker")):
+        return "POOLER_CONNECTION_LIMIT_OR_LOCKOUT"
+    if "read-only transaction" in message:
+        return "SOURCE_READ_ONLY"
+    code=getattr(exc,"sqlstate",None)
+    return "SQLSTATE_"+code if code and re.fullmatch(r"[A-Z0-9]{5}",code) else "UNCLASSIFIED_DATABASE_ERROR"
+
 def main():
     os.umask(0o077)
     check(out("id","-un")=="myradmin","Run as myradmin")
@@ -99,6 +126,17 @@ def main():
     print("Source business tables become read-only. A verified backup and exact row comparison are required. No auto-thaw once VPS writes open.",flush=True)
     if input("Type SWITCH CORE to accept these temporary limitations and activate: ").strip()!="SWITCH CORE":
         raise SystemExit("No changes made.")
+    # Fail fast on invalid credentials before rebuilding, backing up or changing services.
+    pw=getpass.getpass("Existing Supabase database password: ")
+    if not pw:
+        raise SystemExit("Database password required; no changes made.")
+    try:
+        with source_connection(pw) as probe:
+            probe.execute("SET TRANSACTION READ ONLY")
+            probe.execute("SELECT 1").fetchone()
+        print("MYR_SOURCE_CONNECTION_OK",flush=True)
+    except psycopg.Error as exc:
+        raise SystemExit("MYR_SOURCE_CONNECTION_FAILED: "+safe_db_error(exc)+"; no changes made.") from None
     run("sudo","-v")
     commit=out("git","-C",REPO,"rev-parse","HEAD")
     check(re.fullmatch(r"[0-9a-f]{40}",commit),"Invalid commit")
@@ -157,7 +195,6 @@ def main():
         new_conf=tmp/"new-nginx"
         new_conf.write_text(config)
         # Source credentials entered only in VPS terminal; never logged or stored.
-        pw=getpass.getpass("Existing Supabase database password: ")
         key=(HOME/".config/myrinvoice/native-backup-key").read_text().strip()
         check(bool(pw) and len(key)>=32,"Source password and existing backup key required")
         frozen=False
@@ -166,27 +203,33 @@ def main():
         stopped_timer=False
         opened=False
         source=None
+        phase="local_service_start"
         try:
             run("systemctl","--user","daemon-reload")
             run("systemctl","--user","start","myr-production-core.service")
             smoke(False)
             check(local_http("/workspace")[0]==401,"Unauthenticated workspace not rejected")
             check(local_http("/links/read",{"p_token":"0"*32})[0]==503,"Public gate not closed")
-            source=psycopg.connect(host=HOST,port=5432,dbname="postgres",user="postgres."+PROJECT,
-                password=pw,sslmode="verify-full",sslrootcert=str(CA),connect_timeout=10,
-                options="-c statement_timeout=60000")
+            phase="source_connect"
+            source=source_connection(pw)
             pw=None
+            print("MYR_SOURCE_CONNECTED_FOR_CUTOVER",flush=True)
+            phase="source_freeze_transaction"
             # Freeze and compare in the SAME source transaction; a mismatch rolls everything back.
             statements=(REPO/"vps/source-freeze-review.sql").read_text()
             statements=statements.replace("BEGIN;","",1).replace("COMMIT;","",1)
             source.execute(statements,prepare=False)
+            phase="exact_reconciliation"
             with connect() as dest:
                 dest.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
                 compare(source,dest)
+            phase="source_backup"
             snapshot(source,key)
+            phase="source_freeze_commit"
             source.commit()
             frozen=True
             print("MYR_SOURCE_BUSINESS_FROZEN",flush=True)
+            phase="public_routing"
             stopped_timer=True
             run("systemctl","--user","disable","--now","myr-static-deploy.timer")
             run("systemctl","--user","stop","myr-static-deploy.service")
@@ -236,7 +279,8 @@ def main():
             # Remove only this attempt’s pinned release directories after successful pre-write rollback.
             shutil.rmtree(prod)
             shutil.rmtree(web)
-            print("MYR_CORE_CUTOVER_STOPPED_BEFORE_WRITES; previous source retained. Reason:",type(exc).__name__,flush=True)
+            print("MYR_CORE_CUTOVER_STOPPED_BEFORE_WRITES; previous source retained. Phase:",phase,"Reason:",type(exc).__name__,flush=True)
+            if isinstance(exc,psycopg.Error): print("DATABASE_DIAGNOSTIC:",safe_db_error(exc),flush=True)
             if isinstance(exc,RuntimeError): print(str(exc),flush=True)
             raise SystemExit(1) from None
         finally:
