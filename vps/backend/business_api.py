@@ -312,7 +312,8 @@ def test():
     print("MYR_PRODUCTION_CANDIDATE_ISOLATION_OK")
 # Keep the candidate on the private loopback service only.
 from fastapi.staticfiles import StaticFiles
-candidate=Path.home()/"myr-staging"/"business-candidate"
+import os
+candidate=Path(os.environ.get("MYR_CANDIDATE_DIR",str(Path.home()/"myr-staging"/"business-candidate")))
 if candidate.is_dir():
     api.mount("/candidate",StaticFiles(directory=candidate,html=True),name="business-candidate")
 
