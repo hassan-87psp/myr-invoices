@@ -6,6 +6,16 @@ const origin = "https://myrinvoice.com";
 const senderEmail = "no-reply@myrinvoice.com";
 const testRecipient = "invoicesmyr@gmail.com";
 const encoder = new TextEncoder();
+const businessEvents:Record<string,string[]>={
+ invoice:["company","reference","link_token"],
+ quotation:["company","reference"],
+ payment_confirmation:["company","reference","amount"],
+ payment_reminder:["company","reference","due_date"],
+ overdue:["company","reference","due_date"],
+ team_invitation:["company","role"],
+ subscription_expiry:["company","plan","renewal_date"],
+ lhdn_status:["company","reference","status"]
+};
 const templates = {
   verify_email: ["Verify your MYR Invoice email", "Verify your email", "Confirm your email address to create your MYR Invoice account.", "Verify email", "verify-email", "60 minutes"],
   reset_password: ["Reset your MYR Invoice password", "Reset your password", "Use the secure link below to choose a new password.", "Reset password", "reset-password", "20 minutes"],
@@ -50,6 +60,23 @@ Deno.serve(async req=>{
     const t=catalog[key];to=testRecipient;subject="[Preview] "+t.subject;
     text=t.body+"\n\nDelivery preview only. No account was created or changed.";
     html=render(key,"",true);
+  }else if(typeof event==="string"&&Object.hasOwn(businessEvents,event)){
+    if(Deno.env.get("MYR_BUSINESS_MAIL_ENABLED")!=="true")return reply(503,{accepted:false,code:"BUSINESS_MAIL_NOT_RELEASED"});
+    if(Object.keys(data).length!==3||!validRecipient(data.recipient)||!data.details||typeof data.details!=="object"||Array.isArray(data.details))return reply(422,{accepted:false});
+    const allowed=businessEvents[event],details:Record<string,string>={};
+    for(const [k,v] of Object.entries(data.details)){
+      if(!allowed.includes(k)||typeof v!=="string"||v.length<1||v.length>160||/[\x00-\x1f\x7f]/.test(v))return reply(422,{accepted:false});
+      details[k]=v;
+    }
+    if(!allowed.every(k=>Object.hasOwn(details,k)))return reply(422,{accepted:false});
+    // Capability tokens are not printed as details and only allow our own invoice portal.
+    let link="";
+    if(Object.hasOwn(details,"link_token")){
+      if(!/^[A-Za-z0-9_-]{43}$/.test(details.link_token))return reply(422,{accepted:false});
+      link=origin+"/#/v/"+details.link_token;delete details.link_token;
+    }else if(["team_invitation","subscription_expiry","lhdn_status"].includes(event))link=origin;
+    to=data.recipient;subject=catalog[event].subject;html=render(event,link,false,details);
+    text=catalog[event].body+"\n\n"+Object.entries(details).map(([k,v])=>k.replaceAll("_"," ")+": "+v).join("\n")+(link?"\n\n"+link:"");
   }else if(event==="welcome"){
     if(Deno.env.get("MYR_ACCOUNT_MAIL_ENABLED")!=="true")return reply(503,{accepted:false,code:"ACCOUNT_MAIL_NOT_RELEASED"});
     if(Object.keys(data).length!==2||!validRecipient(data.recipient))return reply(422,{accepted:false});

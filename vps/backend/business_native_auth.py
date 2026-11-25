@@ -8,7 +8,7 @@ from threading import Lock
 from time import monotonic
 from collections import OrderedDict
 from urllib.request import Request as URLRequest,build_opener,HTTPRedirectHandler
-import json
+import json, re, ipaddress, os
 from fastapi import APIRouter,Depends,HTTPException,Request,Response
 from pydantic import BaseModel,Field
 from fastapi.responses import HTMLResponse
@@ -41,15 +41,23 @@ def throttle(key,limit,period):
         BUCKETS[key]=(expiry,count+1)
 
 def guard(request,action,email=""):
-    # No trust in arbitrary forwarded headers; public proxy requires its own limiter.
     host=request.client.host if request.client else "unknown"
+    if os.environ.get("MYR_PRODUCTION_RELEASE"):
+        # Only the local production Nginx proxy may supply the overwritten X-Real-IP.
+        if host!="127.0.0.1":
+            raise HTTPException(403,"Trusted proxy required")
+        try:
+            host=str(ipaddress.ip_address(request.headers.get("x-real-ip","")))
+        except ValueError:
+            raise HTTPException(403,"Trusted proxy required") from None
     throttle(("host",action,host),30,60)
     if email:
         throttle(("email",action,email),5,900)
 
 def check_origin(request):
     origin=request.headers.get("origin")
-    if origin not in ("https://myrinvoice.com","http://localhost:8766","http://127.0.0.1:8766"):
+    allowed=("https://myrinvoice.com",) if os.environ.get("MYR_PRODUCTION_RELEASE") else ("https://myrinvoice.com","http://localhost:8766","http://127.0.0.1:8766")
+    if origin not in allowed:
         raise HTTPException(403,"Origin rejected")
     if request.headers.get("content-type","").split(";")[0].strip().lower()!="application/json":
         raise HTTPException(415,"JSON request required")
@@ -63,19 +71,25 @@ def sender():
     # from an untrusted browser. The function must independently authenticate.
     path=CONFIG/"supabase-mail-api-secret"
     try:
-        if not path.is_file() or path.stat().st_mode & 0o077:
+        if path.is_symlink() or not path.is_file() or path.stat().st_uid!=os.getuid() or path.stat().st_mode & 0o077:
             raise ValueError()
         key=path.read_text().strip()
-        if not 32<=len(key)<=512:
+        if not re.fullmatch(r"[a-f0-9]{64}",key):
             raise ValueError()
     except (OSError,ValueError):
         raise HTTPException(503,"Account email service not configured") from None
     def send(email,token,purpose):
-        body=json.dumps({"event":purpose,"recipient":email,"token":token}).encode()
+        if purpose=="welcome" and token is None:
+            payload={"event":"welcome","recipient":email}
+        elif purpose in ("verify_email","reset_password","activate_import") and isinstance(token,str) and re.fullmatch(r"[A-Za-z0-9_-]{43}",token):
+            payload={"event":purpose,"recipient":email,"token":token}
+        else:
+            raise HTTPException(503,"Invalid mail event")
+        body=json.dumps(payload).encode()
         req=URLRequest(ORIGIN+"/functions/v1/myr-transactional-mail",data=body,
             headers={"X-MYR-Mail-Secret":key,"Content-Type":"application/json"},method="POST")
         try:
-            with build_opener(NoRedirect()).open(req,timeout=10) as res:
+            with build_opener(NoRedirect()).open(req,timeout=40) as res:
                 result=json.loads(res.read(8192))
                 if res.status!=200 or result.get("accepted") is not True:
                     raise ValueError()
@@ -199,8 +213,27 @@ def complete(body,request,conn,action):
     return {"status":"ok"}
 
 @router.post("/verify-email")
-def verify_email(body:FinishBody,request:Request,conn=Depends(db)):
-    return complete(body,request,conn,"verify_email")
+def verify_email(body:FinishBody,request:Request,conn=Depends(db),send=Depends(sender)):
+    # Resolve recipient solely from the one-time account token, never the browser.
+    check_origin(request)
+    try:
+        recipient=conn.execute("""SELECT u.email FROM myr_native.auth_tokens t
+            JOIN myr_native.users u ON u.id=t.user_id
+            WHERE t.token_digest=%s AND t.purpose='verify_email'
+            AND t.used_at IS NULL AND t.expires_at>now()""",(digest(body.token),)).fetchone()
+    except (ValueError,UnicodeError):
+        recipient=None
+    result=complete(body,request,conn,"verify_email")
+    # Verification is durable before the courtesy welcome message. Never undo
+    # a successfully verified account if SMTP fails; one-time token prevents repeats.
+    conn.commit()
+    if recipient:
+        try:
+            send(recipient[0],None,"welcome")
+            result["welcome_email"]="accepted"
+        except HTTPException:
+            result["welcome_email"]="unavailable"
+    return result
 
 @router.post("/reset-password")
 def reset_password(body:FinishBody,request:Request,conn=Depends(db)):

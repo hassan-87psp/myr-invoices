@@ -71,9 +71,13 @@ def verified_identity(request,conn):
     scheme,_,token=authorization.partition(" ")
     if scheme.lower()!="bearer" or not token:
         raise HTTPException(401,"Authentication required")
-    # Retain legacy access during the private preparation phase. Account authority
-    # cutover is separate and must be accepted before exposing native routes.
-    return verify_user(token)
+    # Native-password accounts never accept a legacy Supabase bearer token.
+    # Existing imported, passwordless accounts retain the old verified login.
+    uid,email=verify_user(token)
+    if conn.execute("""SELECT 1 FROM myr_native.users
+        WHERE (id=%s OR email=%s) AND password_hash IS NOT NULL""",(uid,email)).fetchone():
+        raise HTTPException(401,"Use native sign-in for this account")
+    return uid,email
 
 def identity(conn,request):
     uid,email=verified_identity(request,conn)
