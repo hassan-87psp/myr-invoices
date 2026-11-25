@@ -22,24 +22,24 @@ def main():
     print("Copy this private value ONLY into Supabase Edge Function Secrets as MYR_MAIL_SHARED_SECRET.")
     print("Do not send it in chat, screenshots or GitHub.")
     print(key)
-    input("After saving the shared secret AND MYR_RESEND_API_KEY in Supabase, press Enter to send a test email: ")
+    input("After saving MYR_MAIL_SHARED_SECRET in Supabase, press Enter to send a test email: ")
     req=Request("https://nynghaleoaqilewmhbdi.supabase.co/functions/v1/myr-transactional-mail",
       data=b'{"event":"test"}',headers={"Content-Type":"application/json","X-MYR-Mail-Secret":key},method="POST")
     try:
-        with urlopen(req,timeout=20) as res:
+        with urlopen(req,timeout=45) as res:
             if res.status!=200 or json.loads(res.read(2048)).get("accepted") is not True: raise ValueError()
     except HTTPError as e:
         try:
             data=json.loads(e.read(2048))
             code=data.get("code","AUTH_OR_CONFIGURATION")
-            if code not in ("MAIL_PROVIDER_NOT_CONFIGURED","PROVIDER_REJECTED","INVALID_PROVIDER_RESPONSE","PROVIDER_UNAVAILABLE"): code="AUTH_OR_CONFIGURATION"
+            if code not in ("SMTP_NOT_CONFIGURED","SMTP_AUTH_FAILED","SMTP_TIMEOUT","SMTP_CONNECTION_FAILED","SMTP_SEND_FAILED","SMTP_RECIPIENT_REJECTED"): code="AUTH_OR_CONFIGURATION"
             print("MYR_MAIL_TEST_FAILED",e.code,code)
-            if code=="PROVIDER_REJECTED": print("PROVIDER_HTTP",data.get("provider_status"))
+            if isinstance(data.get("smtp_status"),int): print("SMTP_STATUS",data["smtp_status"])
         except Exception: print("MYR_MAIL_TEST_FAILED",e.code)
         raise SystemExit(1) from None
     except (OSError,ValueError,URLError):
         raise SystemExit("MYR_MAIL_TEST_CONNECTION_FAILED") from None
-    print("MYR_MAIL_PROVIDER_ACCEPTED_TEST")
+    print("MYR_SMTP_ACCEPTED_TEST")
     print("Check inbox/spam at invoicesmyr@gmail.com. Native account emails remain disabled.")
 
 if __name__=="__main__": main()
