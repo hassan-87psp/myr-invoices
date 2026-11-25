@@ -43,7 +43,7 @@ def record_rows(data, kind):
 def save_record(conn, actor_id, actor_email, company_id, kind, record, expected, automatic=False):
     """One authorized transaction; caller must supply a VERIFIED identity.
 
-    Only upserts ordinary customer/product records and unpaid, unsubmitted
+    Only upserts customer/product records and unpaid, unsubmitted
     invoice drafts. No deletion, payment, approval, team or company mutation.
     """
     require(kind in KINDS, "Unsupported record type")
@@ -73,7 +73,17 @@ def save_record(conn, actor_id, actor_email, company_id, kind, record, expected,
             require(not rec.get("system") and not (old or {}).get("system"), "System customer is protected")
     else:
         require(rec.get("appStatus") in ("Draft", "Ready"), "Only draft/ready invoices are enabled")
-        require(rec.get("docType") == "01", "Only ordinary invoices are enabled in this stage")
+        dtype=rec.get("docType")
+        require(dtype in ("01","02","03","04","11","12","13","14"),"Unsupported document type")
+        require(not old or old.get("docType")==dtype,"Existing document type cannot change")
+        if dtype in ("02","03","04","12","13","14"):
+            require(rec.get("appStatus")=="Draft","Adjustment notes remain drafts until LHDN validation integration")
+            ref=next((x for x in rows if x["id"]==rec.get("refInvoiceId") and x["id"]!=rid),None)
+            require(ref is not None and ref.get("docType")==("11" if dtype.startswith("1") else "01"),"Select a matching original invoice in this company")
+            require(ref.get("customerId")==rec.get("customerId"),"Reference customer must match")
+            require((ref.get("currency") or "MYR")==(rec.get("currency") or "MYR"),"Reference currency must match")
+        elif dtype=="11":
+            require(rec.get("appStatus")=="Draft","Self-billed documents remain drafts in this rehearsal")
         require(not rec.get("payments"), "Payments are disabled in this stage")
         require(not rec.get("share"), "Public invoice links are disabled")
         require(not old or (old.get("appStatus") in ("Draft", "Ready") and not old.get("payments") and not old.get("share")
@@ -168,6 +178,18 @@ def test():
         conn.execute("UPDATE myr_native.company_members SET role='Owner' WHERE company_id=%s AND email=%s",(cid,email))
         auto=save_record(conn,uid,email,cid,"invoices",{**invoice,"id":str(uuid4())},None,True)
         assert auto["record"]["number"]=="TEST-2" and auto["company_data"]["nextNo"]==3
+        for dtype in ("02","03","04"):
+            adj={**invoice,"id":str(uuid4()),"docType":dtype,"refInvoiceId":invoice["id"]}
+            result=save_record(conn,uid,email,cid,"invoices",adj,None,True)
+            assert result["record"]["docType"]==dtype and result["record"]["appStatus"]=="Draft"
+        sb=save_record(conn,uid,email,cid,"invoices",{**invoice,"id":str(uuid4()),"docType":"11"},None,True)["record"]
+        for dtype in ("12","13","14"):
+            adj={**invoice,"id":str(uuid4()),"docType":dtype,"refInvoiceId":sb["id"]}
+            assert save_record(conn,uid,email,cid,"invoices",adj,None,True)["record"]["docType"]==dtype
+        expect_reject(lambda:save_record(conn,uid,email,cid,"invoices",{**invoice,"id":str(uuid4()),"docType":"02","refInvoiceId":"missing"},None,True))
+        expect_reject(lambda:save_record(conn,uid,email,cid,"invoices",{**invoice,"id":str(uuid4()),"docType":"12","refInvoiceId":invoice["id"]},None,True))
+        expect_reject(lambda:save_record(conn,uid,email,cid,"invoices",{**invoice,"id":str(uuid4()),"docType":"02","refInvoiceId":invoice["id"],"appStatus":"Ready"},None,True))
+        print("VPS_ADJUSTMENT_DRAFT_ROLLBACK_OK")
     finally:
         conn.rollback()
         conn.close()
@@ -175,7 +197,7 @@ def test():
         assert check.execute("SELECT count(*) FROM myr_native.companies WHERE id=ANY(%s)",([cid,other],)).fetchone()[0]==0
     print("VPS_NATIVE_RECORD_WRITE_ROLLBACK_TEST_OK")
     print("Draft invoice, customer, product, revision, audit, stale edit and tenant rejection tested.")
-    print("HTTP/UI writes remain disabled; synthetic records rolled back.")
+    print("Rollback fixtures removed; real company writes remain disabled.")
 
 if __name__=="__main__":
     test()
