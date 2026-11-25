@@ -11,6 +11,7 @@ from hybrid_workspace import verify_user, workspace, GRANT
 from native_record_writes import save_record, WriteRejected
 from app import connect
 from native_payment_ops import add_payment, delete_record
+from native_profile_ops import save_profile
 
 WRITE_GRANT=GRANT.with_name("hybrid-write-test-company")
 TEST_NAME="MYR VPS WRITE TEST (synthetic)"
@@ -43,6 +44,7 @@ class RecordBody(BaseModel):
     p_kind:str
     p_record:dict
     p_expected:dict|None=None
+    p_auto:bool=False
 
 @api.post("/hybrid/test-record")
 def write_test(body:RecordBody,request:Request,conn=Depends(db)):
@@ -52,7 +54,7 @@ def write_test(body:RecordBody,request:Request,conn=Depends(db)):
         raise HTTPException(403,"Only the synthetic test company can be changed")
     # Serialize and commit before acknowledging success.
     try:
-        result=save_record(conn,uid,email,co["id"],body.p_kind,body.p_record,body.p_expected)
+        result=save_record(conn,uid,email,co["id"],body.p_kind,body.p_record,body.p_expected,body.p_auto)
         conn.commit()
         return result
     except WriteRejected as exc:
@@ -91,6 +93,16 @@ def payment_test(body:PaymentBody,request:Request,conn=Depends(db)):
 def deletion_test(body:DeleteBody,request:Request,conn=Depends(db)):
     return checked_operation(conn,request,body.p_company_id,
         lambda uid,email:delete_record(conn,uid,email,body.p_company_id,body.p_kind,body.p_expected))
+
+class ProfileBody(BaseModel):
+    p_company_id:UUID
+    p_version:int
+    p_profile:dict
+
+@api.post("/hybrid/test-profile")
+def profile_test(body:ProfileBody,request:Request,conn=Depends(db)):
+    return checked_operation(conn,request,body.p_company_id,
+        lambda uid,email:save_profile(conn,uid,email,body.p_company_id,body.p_version,body.p_profile))
 
 def setup():
     uid=UUID(GRANT.read_text().strip())
