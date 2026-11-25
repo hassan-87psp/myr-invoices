@@ -280,6 +280,14 @@ def test():
             else: raise AssertionError("Cross-tenant or synthetic access")
         conn.execute("UPDATE myr_native.company_members SET role='Read-Only' WHERE company_id=%s AND email=%s",(cid,email))
         assert workspace(conn,profile)["companies"]==[]
+        try: owner_company(conn,profile,cid,roles=("Owner","Admin","Accountant","Invoice Staff"))
+        except HTTPException as exc: assert exc.status_code==404
+        else: raise AssertionError("Read-only user authorized for writes")
+        conn.execute("UPDATE myr_native.company_members SET role='Accountant' WHERE company_id=%s AND email=%s",(cid,email))
+        owner_company(conn,profile,cid,roles=("Owner","Admin","Accountant","Invoice Staff"))
+        try: owner_company(conn,profile,cid)
+        except HTTPException as exc: assert exc.status_code==404
+        else: raise AssertionError("Accountant authorized for owner-only operation")
     finally:
         conn.rollback()
         conn.close()
