@@ -44,14 +44,20 @@ def main():
             raise SystemExit("Backup decrypt verification failed")
         target=folder/("native-"+stamp+".dump.gpg")
         encrypted.chmod(0o600)
+        checksum=root/"archive.sha256"
+        checksum.write_text(file_hash(encrypted).hex()+"  "+target.name+"\n")
+        checksum.chmod(0o600)
         encrypted.rename(target)
+        checksum.rename(target.with_name(target.name+".sha256"))
     # Prune only our own completed native backup files, after successful verification.
     cutoff=datetime.datetime.now(datetime.timezone.utc).timestamp()-14*86400
     for p in folder.glob("native-*.dump.gpg"):
         if p.is_file() and not p.is_symlink() and p.stat().st_mtime<cutoff:
             p.unlink()
+            checksum=p.with_name(p.name+".sha256")
+            if checksum.is_file() and not checksum.is_symlink(): checksum.unlink()
     print("VPS_ENCRYPTED_NATIVE_BACKUP_OK",target.name)
-    print("Local backup verified; offsite copy and full restore drill pending.")
+    print("Local backup and checksum verified; offsite transfer must be checked independently.")
 
 if __name__=="__main__":
     main()
