@@ -49,6 +49,18 @@ def identity(conn,request):
     # external identity authority; native password login is not exposed here.
     return dict(zip(("id","email","name","is_platform_admin"),row))
 
+def workspace_identity(conn,request):
+    """Unprovisioned verified accounts may see only an empty onboarding shell.
+    An email collision must never inherit an existing tenant or administrator.
+    """
+    uid,email=verified_identity(request)
+    row=conn.execute("SELECT id,email,name,is_platform_admin,email_verified_at FROM myr_native.users WHERE id=%s OR email=%s",(uid,email)).fetchall()
+    if not row:
+        return {"id":uid,"email":email,"name":None,"is_platform_admin":False,"onboarding_only":True}
+    if len(row)!=1 or row[0][0]!=uid or row[0][1]!=email or row[0][4] is None:
+        raise HTTPException(403,"Verified account identity conflict")
+    return dict(zip(("id","email","name","is_platform_admin"),row[0][:4]))
+
 def owner_company(conn,profile,cid,lock=False,roles=('Owner',)):
     if profile["is_platform_admin"]:
         raise HTTPException(403,"Business owner required")
@@ -62,6 +74,9 @@ def owner_company(conn,profile,cid,lock=False,roles=('Owner',)):
         raise HTTPException(404,"Company unavailable")
 
 def workspace(conn,profile):
+    if profile.get("onboarding_only"):
+        return {"profile":profile,"companies":[],"members":[],"documents":[],"links":[],
+                "mode":"native_candidate","writes_enabled":False}
     if profile["is_platform_admin"]:
         raise HTTPException(403,"Business owner required")
     with conn.cursor(row_factory=dict_row) as cur:
@@ -92,7 +107,7 @@ def health(conn=Depends(db)):
 @api.get("/workspace")
 def read_workspace(request:Request,conn=Depends(db)):
     conn.execute("SET TRANSACTION READ ONLY")
-    return workspace(conn,identity(conn,request))
+    return workspace(conn,workspace_identity(conn,request))
 
 # No production writes exposed yet. These entry points deliberately fail
 # closed while the source remains live, even if a client tries direct requests.
@@ -270,6 +285,7 @@ def test():
         for company in (cid,synthetic):
             conn.execute("INSERT INTO myr_native.company_members(company_id,email,role,status) VALUES(%s,%s,'Owner','active')",(company,email))
         profile={"id":uid,"email":email,"name":"Test","is_platform_admin":False}
+        assert workspace(conn,{"id":uuid4(),"email":"onboarding@example.invalid","name":None,"is_platform_admin":False,"onboarding_only":True})["companies"]==[]
         result=workspace(conn,profile)
         assert [x["id"] for x in result["companies"]]==[cid]
         assert result["writes_enabled"] is False
