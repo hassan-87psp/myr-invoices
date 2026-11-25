@@ -49,8 +49,10 @@ def guard(request,action,email=""):
 
 def check_origin(request):
     origin=request.headers.get("origin")
-    if origin and origin not in ("https://myrinvoice.com","http://localhost:8766","http://127.0.0.1:8766"):
+    if origin not in ("https://myrinvoice.com","http://localhost:8766","http://127.0.0.1:8766"):
         raise HTTPException(403,"Origin rejected")
+    if request.headers.get("content-type","").split(";")[0].strip().lower()!="application/json":
+        raise HTTPException(415,"JSON request required")
 
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self,*args,**kwargs):

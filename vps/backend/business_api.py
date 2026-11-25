@@ -7,6 +7,8 @@ them after reconciliation and complete frontend acceptance. Bind loopback only.
 from pathlib import Path
 from uuid import UUID, uuid4
 from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
+import os, stat
 from pydantic import BaseModel, Field
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
@@ -23,6 +25,7 @@ import business_native_auth as native
 
 api=FastAPI(title="MYR business API",docs_url=None,redoc_url=None,openapi_url=None)
 WRITE_FLAG=Path.home()/".config/myrinvoice/production-writes-enabled"
+NATIVE_FLAG=Path.home()/".config/myrinvoice/native-auth-pilot-enabled"
 api.include_router(native.router)
 
 def db():
@@ -31,32 +34,62 @@ def db():
 
 @api.middleware("http")
 async def headers(request,call_next):
-    response=await call_next(request)
+    if os.environ.get("MYR_PRODUCTION_RELEASE") and request.url.path.startswith("/native/") and not native_enabled():
+        response=JSONResponse({"detail":"Native authentication not released"},status_code=503)
+    else:
+        response=await call_next(request)
     response.headers["Cache-Control"]="no-store"
     response.headers["X-Content-Type-Options"]="nosniff"
     return response
 
-def verified_identity(request):
-    scheme,_,token=request.headers.get("authorization","").partition(" ")
+def native_enabled():
+    if not writes_enabled():
+        return False
+    try:
+        st=NATIVE_FLAG.lstat()
+        return (stat.S_ISREG(st.st_mode) and st.st_uid==os.getuid() and not(st.st_mode & 0o077)
+                and NATIVE_FLAG.read_text().strip()==os.environ.get("MYR_PRODUCTION_RELEASE"))
+    except OSError:
+        return False
+
+def verified_identity(request,conn):
+    # Native and legacy are explicit alternative credentials, never mixed.
+    cookie=request.cookies.get(native.COOKIE)
+    authorization=request.headers.get("authorization","")
+    if cookie is not None:
+        if not native_enabled():
+            raise HTTPException(401,"Native authentication not released")
+        if authorization:
+            raise HTTPException(401,"Conflicting credentials")
+        if request.method not in ("GET","HEAD","OPTIONS"):
+            if request.headers.get("origin")!="https://myrinvoice.com":
+                raise HTTPException(403,"Origin rejected")
+            if request.headers.get("content-type","").split(";")[0].strip().lower()!="application/json":
+                raise HTTPException(415,"JSON request required")
+        p=native.current(conn,request)
+        return p["id"],p["email"]
+    scheme,_,token=authorization.partition(" ")
     if scheme.lower()!="bearer" or not token:
         raise HTTPException(401,"Authentication required")
+    # Retain legacy access during the private preparation phase. Account authority
+    # cutover is separate and must be accepted before exposing native routes.
     return verify_user(token)
 
 def identity(conn,request):
-    uid,email=verified_identity(request)
+    uid,email=verified_identity(request,conn)
     row=conn.execute("""SELECT id,email,name,is_platform_admin FROM myr_native.users
         WHERE id=%s AND email=%s AND email_verified_at IS NOT NULL""",(uid,email)).fetchone()
     if not row:
         raise HTTPException(403,"Verified account not provisioned")
-    # Imported native password accounts are disabled. Supabase is the sole
-    # external identity authority; native password login is not exposed here.
+    # Both credentials resolve the same account UUID and tenant memberships.
+    # Native access remains separately gated until pilot approval.
     return dict(zip(("id","email","name","is_platform_admin"),row))
 
 def workspace_identity(conn,request):
     """Unprovisioned verified accounts may see only an empty onboarding shell.
     An email collision must never inherit an existing tenant or administrator.
     """
-    uid,email=verified_identity(request)
+    uid,email=verified_identity(request,conn)
     row=conn.execute("SELECT id,email,name,is_platform_admin,email_verified_at FROM myr_native.users WHERE id=%s OR email=%s",(uid,email)).fetchall()
     if not row:
         return {"id":uid,"email":email,"name":None,"is_platform_admin":False,"onboarding_only":True}
@@ -163,7 +196,7 @@ class OnboardBody(BaseModel):
 
 @api.post("/onboard")
 def onboard(body:OnboardBody,request:Request,conn=Depends(db)):
-    uid,email=verified_identity(request)
+    uid,email=verified_identity(request,conn)
     require_cutover()
     return run_write(conn,lambda:create_company(conn,uid,email,body.p_profile))
 
@@ -218,7 +251,7 @@ class ApprovalBody(BaseModel):
 
 @api.post("/team/accept")
 def accept_team(request:Request,conn=Depends(db)):
-    uid,email=verified_identity(request)
+    uid,email=verified_identity(request,conn)
     require_cutover()
     return run_write(conn,lambda:accept_invites(conn,uid,email))
 

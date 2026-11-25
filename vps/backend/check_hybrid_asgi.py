@@ -18,9 +18,9 @@ from staging_api import db
 from private_preview import api
 from app import connect
 
-async def request(method,path,body=None,token="owner",client="127.0.0.1"):
+async def request(method,path,body=None,token="owner",client="127.0.0.1",extra_headers=()):
     payload=json.dumps(body).encode() if body is not None else b""
-    headers=[(b"content-type",b"application/json")]
+    headers=[(b"content-type",b"application/json"),*extra_headers]
     if token is not None:
         headers.append((b"authorization",("Bearer "+token).encode()))
     scope={"type":"http","asgi":{"version":"3.0","spec_version":"2.4"},
