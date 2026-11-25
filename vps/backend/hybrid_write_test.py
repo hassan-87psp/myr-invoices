@@ -12,6 +12,7 @@ from native_record_writes import save_record, WriteRejected
 from app import connect
 from native_payment_ops import add_payment, delete_record
 from native_profile_ops import save_profile
+from native_team_workflow import team_change, invoice_workflow
 
 WRITE_GRANT=GRANT.with_name("hybrid-write-test-company")
 TEST_NAME="MYR VPS WRITE TEST (synthetic)"
@@ -103,6 +104,31 @@ class ProfileBody(BaseModel):
 def profile_test(body:ProfileBody,request:Request,conn=Depends(db)):
     return checked_operation(conn,request,body.p_company_id,
         lambda uid,email:save_profile(conn,uid,email,body.p_company_id,body.p_version,body.p_profile))
+
+class TeamBody(BaseModel):
+    p_company_id:UUID
+    p_operation:str
+    p_email:str
+    p_role:str|None=None
+
+@api.post("/hybrid/test-team")
+def team_test(body:TeamBody,request:Request,conn=Depends(db)):
+    def apply(uid,email):
+        if not body.p_email.lower().endswith("@example.invalid"):
+            raise WriteRejected("Only synthetic addresses are allowed")
+        return {"version":team_change(conn,uid,email,body.p_company_id,body.p_operation,body.p_email,body.p_role)}
+    return checked_operation(conn,request,body.p_company_id,apply)
+
+class ApprovalBody(BaseModel):
+    p_company_id:UUID
+    p_invoice_id:str
+    p_version:int
+    p_action:str
+
+@api.post("/hybrid/test-approval")
+def approval_test(body:ApprovalBody,request:Request,conn=Depends(db)):
+    return checked_operation(conn,request,body.p_company_id,
+        lambda uid,email:invoice_workflow(conn,uid,email,body.p_company_id,body.p_invoice_id,body.p_version,body.p_action))
 
 def setup():
     uid=UUID(GRANT.read_text().strip())
