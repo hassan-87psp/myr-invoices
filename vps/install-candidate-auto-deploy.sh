@@ -109,7 +109,8 @@ cat >"$UNITS/myr-candidate-deploy.timer" <<'UNIT'
 [Unit]
 Description=Check MYR private candidate for GitHub changes
 [Timer]
-OnCalendar=*:0/5
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
 Persistent=true
 Unit=myr-candidate-deploy.service
 [Install]
