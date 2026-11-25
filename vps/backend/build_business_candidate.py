@@ -43,6 +43,15 @@ function rmMember(e){confirmBox('Remove member?','This removes company access.',
     # Public capability routes do not use a user bearer token. They still
     # fail closed at the backend until a real cutover is approved.
     html=once(html,"rpc:async(name,args)=>{const endpoint=","""rpc:async(name,args)=>{const publicEndpoint={get_public_link:'/links/read',submit_public_link:'/links/submit'}[name];if(publicEndpoint){try{const payload=structuredClone(args);if(name==='submit_public_link'&&payload.p_payload&&Object.prototype.hasOwnProperty.call(payload.p_payload,'addr')){delete payload.p_payload.at;payload.p_payload.consent=!!document.getElementById('by-ok')?.checked}const res=await fetch(publicEndpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),cache:'no-store'});const data=await res.json();if(!res.ok)throw new Error(typeof data.detail==='string'?data.detail:'Link unavailable');return {data,error:null}}catch(error){return {data:null,error}}}const endpoint=""")
+    # Optional same-origin production routing build. Private candidate stays
+    # unchanged by default and the API write gate is never opened here.
+    prefix=os.environ.get("MYR_BUSINESS_API_PREFIX","")
+    if prefix not in ("","/api/myr"):
+        raise SystemExit("Unapproved API prefix")
+    if prefix:
+        html=once(html,"fetch('/workspace',","fetch('/api/myr/workspace',")
+        for route in ("/records","/payments","/delete","/profile","/team","/approval","/onboard","/links/read","/links/submit"):
+            html=once(html,"'"+route+"'","'"+prefix+route+"'")
     # No fallback to the Supabase data API.
     assert "from:()=>{throw new Error(" in html
     assert "/hybrid/test-" not in html and "/hybrid/write-workspace" not in html
