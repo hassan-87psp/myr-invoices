@@ -14,6 +14,7 @@ from app import connect
 from hybrid_workspace import verify_user
 from native_record_writes import save_record, WriteRejected
 from native_payment_ops import add_payment, delete_record
+from business_onboarding import create_company, update_profile
 
 api=FastAPI(title="MYR business API",docs_url=None,redoc_url=None,openapi_url=None)
 WRITE_FLAG=Path.home()/".config/myrinvoice/production-writes-enabled"
@@ -29,11 +30,14 @@ async def headers(request,call_next):
     response.headers["X-Content-Type-Options"]="nosniff"
     return response
 
-def identity(conn,request):
+def verified_identity(request):
     scheme,_,token=request.headers.get("authorization","").partition(" ")
     if scheme.lower()!="bearer" or not token:
         raise HTTPException(401,"Authentication required")
-    uid,email=verify_user(token)
+    return verify_user(token)
+
+def identity(conn,request):
+    uid,email=verified_identity(request)
     row=conn.execute("""SELECT id,email,name,is_platform_admin FROM myr_native.users
         WHERE id=%s AND email=%s AND email_verified_at IS NOT NULL""",(uid,email)).fetchone()
     if not row:
@@ -92,11 +96,41 @@ def read_workspace(request:Request,conn=Depends(db)):
 def checked_write(conn,request,cid,operation):
     profile=identity(conn,request)
     owner_company(conn,profile,cid,lock=True)
-    if not WRITE_FLAG.is_file() or WRITE_FLAG.read_text().strip()!="APPROVED":
-        raise HTTPException(503,"VPS business writes not enabled")
-    # Gate is additionally hard-disabled until remaining APIs and integration
-    # tests pass; a flag alone must not create two writable databases.
+    require_cutover()
+    return run_write(conn,lambda:operation(profile["id"],profile["email"]))
+
+def require_cutover():
+    # Hard gate: no live writes until the source is frozen, verified and
+    # full business functionality has passed acceptance. Never toggle via HTTP.
     raise HTTPException(503,"Production cutover not released")
+
+def run_write(conn,operation):
+    try:
+        result=operation()
+        conn.commit()
+        return result
+    except WriteRejected as exc:
+        conn.rollback()
+        raise HTTPException(409,str(exc)) from None
+
+class ProfileBody(BaseModel):
+    p_company_id:UUID
+    p_version:int
+    p_profile:dict
+
+class OnboardBody(BaseModel):
+    p_profile:dict
+
+@api.post("/onboard")
+def onboard(body:OnboardBody,request:Request,conn=Depends(db)):
+    uid,email=verified_identity(request)
+    require_cutover()
+    return run_write(conn,lambda:create_company(conn,uid,email,body.p_profile))
+
+@api.post("/profile")
+def profile(body:ProfileBody,request:Request,conn=Depends(db)):
+    return checked_write(conn,request,body.p_company_id,
+        lambda uid,email:update_profile(conn,uid,email,body.p_company_id,body.p_version,body.p_profile))
 
 class RecordBody(BaseModel):
     p_company_id:UUID
