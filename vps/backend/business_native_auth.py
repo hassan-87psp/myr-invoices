@@ -237,6 +237,17 @@ def test():
             assert finish_password(conn,reset,pw+"2","reset_password")
             assert session_user(conn,session) is None
             assert authenticate(conn,email,pw+"2")==uid
+            fresh="signup-"+uid.hex+"@example.invalid"
+            first=begin_signup(conn,fresh)
+            second=begin_signup(conn,fresh)
+            assert first and second and first!=second
+            assert not finish_password(conn,first,pw,"verify_email")
+            assert authenticate(conn,fresh,pw) is None
+            assert finish_password(conn,second,pw,"verify_email","Synthetic user")
+            assert authenticate(conn,fresh,pw) is not None
+            assert not finish_password(conn,second,pw,"verify_email")
+            assert begin_signup(conn,fresh) is None
+            assert begin_activation(conn,fresh,lambda _:True) is None
         finally:
             conn.rollback()
     with connect() as conn:
