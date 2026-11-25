@@ -11,13 +11,21 @@ from urllib.request import Request as URLRequest,build_opener,HTTPRedirectHandle
 import json, re, ipaddress, os
 from fastapi import APIRouter,Depends,HTTPException,Request,Response
 from pydantic import BaseModel,Field
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from app import connect
 from native_auth import authenticate,issue_session,session_user,revoke_session,digest,hash_password
 from account_lifecycle import normalize_email,begin_signup,begin_reset,finish_password,new_token
 
 router=APIRouter(prefix="/native/auth")
 COOKIE="myr_native_session"
+PILOT_EMAIL="invoicesmyr@gmail.com"
+
+def production_pilot():
+    return bool(os.environ.get("MYR_PRODUCTION_RELEASE"))
+
+def pilot_email(email):
+    if production_pilot() and email!=PILOT_EMAIL:
+        raise HTTPException(403,"Native account pilot is restricted to the test mailbox")
 CONFIG=Path.home()/".config/myrinvoice"
 ORIGIN="https://nynghaleoaqilewmhbdi.supabase.co"
 APPROVED=CONFIG/"native-activation-users"
@@ -53,6 +61,8 @@ def guard(request,action,email=""):
     throttle(("host",action,host),30,60)
     if email:
         throttle(("email",action,email),5,900)
+    if production_pilot():
+        throttle(("pilot",action),20,60)
 
 def check_origin(request):
     origin=request.headers.get("origin")
@@ -85,6 +95,11 @@ def sender():
             payload={"event":purpose,"recipient":email,"token":token}
         else:
             raise HTTPException(503,"Invalid mail event")
+        if production_pilot():
+            pilot_email(email)
+            if purpose not in ("verify_email","reset_password","welcome"):
+                raise HTTPException(503,"Account action not released")
+            payload["event"]="pilot_"+purpose
         body=json.dumps(payload).encode()
         req=URLRequest(ORIGIN+"/functions/v1/myr-transactional-mail",data=body,
             headers={"X-MYR-Mail-Secret":key,"Content-Type":"application/json"},method="POST")
@@ -162,6 +177,8 @@ def login(body:LoginBody,request:Request,response:Response,conn=Depends(db)):
     check_origin(request)
     email=checked_email(body.email)
     guard(request,"login",email)
+    if production_pilot() and email!=PILOT_EMAIL:
+        raise HTTPException(401,"Native credentials unavailable")
     uid=authenticate(conn,email,body.password)
     if uid is None:
         raise HTTPException(401,"Invalid credentials or account unavailable")
@@ -171,7 +188,14 @@ def login(body:LoginBody,request:Request,response:Response,conn=Depends(db)):
 
 @router.get("/me")
 def me(request:Request,conn=Depends(db)):
-    return current(conn,request)
+    try:
+        return current(conn,request)
+    except HTTPException as exc:
+        if exc.status_code!=401: raise
+        response=JSONResponse({"detail":"Native sign-in required"},status_code=401)
+        if request.cookies.get(COOKIE) is not None:
+            response.delete_cookie(COOKIE,path="/",secure=True,httponly=True,samesite="strict")
+        return response
 
 @router.post("/logout")
 def logout(request:Request,response:Response,conn=Depends(db)):
@@ -183,6 +207,9 @@ def logout(request:Request,response:Response,conn=Depends(db)):
 def request_email(body,request,conn,send,action):
     check_origin(request)
     email=checked_email(body.email)
+    pilot_email(email)
+    if production_pilot() and action=="activate_import":
+        raise HTTPException(503,"Imported activation not released")
     guard(request,action,email)
     token={"verify_email":begin_signup,"reset_password":begin_reset,"activate_import":begin_activation}[action](conn,email)
     if token:
@@ -204,6 +231,18 @@ def activate_request(body:EmailBody,request:Request,conn=Depends(db),send=Depend
 def complete(body,request,conn,action):
     check_origin(request)
     guard(request,"complete")
+    if production_pilot():
+        if action=="activate_import":
+            raise HTTPException(503,"Imported activation not released")
+        try:
+            recipient=conn.execute("""SELECT u.email FROM myr_native.auth_tokens t
+                JOIN myr_native.users u ON u.id=t.user_id
+                WHERE t.token_digest=%s AND t.used_at IS NULL AND t.expires_at>now()
+                AND NOT u.is_platform_admin""",(digest(body.token),)).fetchone()
+        except (ValueError,UnicodeError):
+            recipient=None
+        if not recipient or recipient[0]!=PILOT_EMAIL:
+            raise HTTPException(400,"Invalid or expired account link")
     try:
         ok=finish_activation(conn,body.token,body.password) if action=="activate_import" else finish_password(conn,body.token,body.password,action,body.name)
     except ValueError:

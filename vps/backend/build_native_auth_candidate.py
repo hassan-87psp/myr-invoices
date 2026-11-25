@@ -15,13 +15,13 @@ function myrNativeAuth(client){
  const legacy=client.auth;
  let nativeActive=false;
  const getSession=async()=>{try{const p=await myrNativeRequest('me');nativeActive=true;return {data:{session:{native:true,user:{id:p.id,email:p.email,user_metadata:{name:p.name}}}},error:null}}
- catch(e){if(![401,404,503].includes(e.status))return {data:{session:null},error:e};nativeActive=false;return legacy.getSession()}};
+ catch(e){if(![401,404].includes(e.status))return {data:{session:null},error:e};nativeActive=false;return legacy.getSession()}};
  return {
  getSession,
  getUser:async()=>{const r=await getSession();return {data:{user:r.data.session?.user||null},error:r.error}},
  signInWithPassword:async({email,password})=>{
   try{await myrNativeRequest('login',{email,password});nativeActive=true;await legacy.signOut({scope:'local'});const r=await getSession();if(!r.data.session?.native)throw new Error('Native session not established');return {data:{session:r.data.session,user:r.data.session.user},error:null}}
-  catch(e){if(!nativeActive&&[401,404,503].includes(e.status))return legacy.signInWithPassword({email,password});return {data:null,error:e}}},
+  catch(e){if(!nativeActive&&[401,404].includes(e.status))return legacy.signInWithPassword({email,password});return {data:null,error:e}}},
  signOut:async()=>{try{if(nativeActive)await myrNativeRequest('logout',{});nativeActive=false;return legacy.signOut({scope:'local'})}catch(e){return {error:e}}},
  onAuthStateChange:(cb)=>legacy.onAuthStateChange((ev,s)=>{if(!nativeActive)cb(ev,s)}),
  signUp:async({email})=>{try{await myrNativeRequest('signup',{email});return {data:{session:null},error:null}}catch(e){return {data:null,error:e}}},
@@ -32,7 +32,7 @@ function myrNativeAuth(client){
 const myrAuthHeaders=(session,json=false)=>({...(!session.native?{Authorization:'Bearer '+session.access_token}:{}),...(json?{'Content-Type':'application/json'}:{})});
 let MYR_FINISH_TOKEN='';
 function myrFinishView(action){
- const labels={'verify-email':'Verify email and create account','reset-password':'Choose your new password','activate':'Activate your account'};
+ const labels={'verify-email':'Verify email and create account','reset-password':'Choose your new password'};
  if(!Object.hasOwn(labels,action))return vAuth('login');
  const token=new URLSearchParams(location.hash.split('?')[1]||'').get('token');
  if(token&&/^[A-Za-z0-9_-]{43}$/.test(token)){MYR_FINISH_TOKEN=token;history.replaceState(null,'','#/auth/'+action)}
@@ -41,7 +41,7 @@ function myrFinishView(action){
 }
 async function myrFinishSubmit(action){
  const btn=document.querySelector('#app form button[type=submit]');if(!btn||btn.disabled)return;
- const pw=val('finish-password'),confirm=val('finish-confirm'),name=val('finish-name');
+ const pw=document.getElementById('finish-password').value,confirm=document.getElementById('finish-confirm').value,name=val('finish-name');
  if(!MYR_FINISH_TOKEN)return authErr('Open the secure link from your email again.');
  if(pw.length<12||pw!==confirm)return authErr('Passwords must match and contain at least 12 characters.');
  btn.disabled=true;try{await myrNativeRequest(action,{token:MYR_FINISH_TOKEN,password:pw,name});MYR_FINISH_TOKEN='';go('#/login');toast('Account updated. Please sign in.')}catch(e){authErr(e.message)}finally{btn.disabled=false}
@@ -68,6 +68,7 @@ def transform(html):
     html=once(html,"['app','admin','login','signup','r','v'].includes(p[0])","['app','admin','login','signup','auth','r','v'].includes(p[0])")
     html=once(html,"if(p[0]==='login'||p[0]==='signup')return paint(vAuth(p[0]));","if(p[0]==='auth')return paint(myrFinishView(p[1]));if(p[0]==='login'||p[0]==='signup')return paint(vAuth(p[0]));")
     html=once(html,"await SB.auth.signOut();myrDraftClearAll();","const signedOut=await SB.auth.signOut();if(signedOut.error)return toast('Sign-out failed. Retry.','err');myrDraftClearAll();")
+    html=once(html,"Start with the LHDN sandbox. No card required.","New account registration is currently a limited email-delivery pilot.")
     assert "from:()=>{throw new Error(" in html
     return html
 
