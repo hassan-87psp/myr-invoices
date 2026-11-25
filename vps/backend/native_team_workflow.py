@@ -26,19 +26,19 @@ def onboarding(conn,uid,email,name):
     conn.execute("INSERT INTO myr_native.audit_logs(company_id,actor,actor_email,action,detail) VALUES(%s,%s,%s,'company.create','Synthetic onboarding')",(cid,uid,email))
     return cid
 
-def locked_company(conn,uid,email,cid,roles):
-    row=conn.execute("""SELECT c.version,c.data,m.role FROM myr_native.companies c
+def locked_company(conn,uid,email,cid,roles,*,synthetic=True):
+    row=conn.execute("""SELECT c.version,c.data,m.role,c.plan FROM myr_native.companies c
       JOIN myr_native.company_members m ON m.company_id=c.id
       JOIN myr_native.users u ON u.email=m.email
-      WHERE c.id=%s AND c.status='active' AND c.data->>'vpsSyntheticWriteTest'='true'
+      WHERE c.id=%s AND c.status='active' AND (c.data->>'vpsSyntheticWriteTest' IS NOT DISTINCT FROM 'true')=%s
       AND u.id=%s AND u.email=%s AND u.email_verified_at IS NOT NULL AND NOT u.is_platform_admin
       AND m.status='active' AND m.role=ANY(%s)
-      FOR UPDATE OF c FOR SHARE OF m,u""",(cid,uid,email,list(roles))).fetchone()
+      FOR UPDATE OF c FOR SHARE OF m,u""",(cid,synthetic,uid,email,list(roles))).fetchone()
     require(row is not None,"Workflow not authorized")
     return row
 
-def team_change(conn,uid,email,cid,operation,target,role=None):
-    version,data,_=locked_company(conn,uid,email,cid,("Owner",))
+def team_change(conn,uid,email,cid,operation,target,role=None,*,synthetic=True):
+    version,data,_,plan=locked_company(conn,uid,email,cid,("Owner",),synthetic=synthetic)
     require(isinstance(target,str) and len(target)<=254 and re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",target),"Invalid team email")
     target=target.lower()
     require(target!=email,"Owner membership is protected")
@@ -47,7 +47,8 @@ def team_change(conn,uid,email,cid,operation,target,role=None):
     if operation=="invite":
         require(role in TEAM_ROLES and (not member or member[1]=="removed"),"Invalid or existing member")
         # Invitations are intentionally pending; no mail or automatic access.
-        require(conn.execute("SELECT count(*) FROM myr_native.company_members WHERE company_id=%s AND status IN ('active','invited')",(cid,)).fetchone()[0]<10,"Synthetic seat cap reached")
+        seat_limit=10 if synthetic else {"Starter":1,"Pro":3,"Business":10}.get(plan,1)
+        require(conn.execute("SELECT count(*) FROM myr_native.company_members WHERE company_id=%s AND status IN ('active','invited')",(cid,)).fetchone()[0]<seat_limit,"Plan seat limit reached")
         conn.execute("""INSERT INTO myr_native.company_members(company_id,email,role,status)
           VALUES(%s,%s,%s,'invited') ON CONFLICT(company_id,email)
           DO UPDATE SET role=excluded.role,status='invited'""",(cid,target,role))
@@ -62,10 +63,12 @@ def team_change(conn,uid,email,cid,operation,target,role=None):
     persist(conn,uid,email,cid,version,data,data,"team."+operation,target)
     return version+1
 
-def invoice_workflow(conn,uid,email,cid,invoice_id,expected_version,action):
+def invoice_workflow(conn,uid,email,cid,invoice_id,expected_version,action,*,synthetic=True):
     roles=("Owner","Admin","Accountant","Invoice Staff") if action=="request" else ("Owner","Admin","Approver")
     require(action in ("request","approve","reject"),"Invalid approval action")
-    version,data,_=locked_company(conn,uid,email,cid,roles)
+    version,data,_,plan=locked_company(conn,uid,email,cid,roles,synthetic=synthetic)
+    if not synthetic:
+        require(plan=='Business' and data.get('approvalRequired') is True,'Business approval workflow not enabled')
     require(type(expected_version) is int and expected_version==version,"Company changed; reload")
     rows=record_rows(data,"invoices")
     inv=next((r for r in rows if r["id"]==invoice_id),None)
