@@ -26,6 +26,23 @@ def https(path,body=None,origin=None):
     if body is not None: args+=["-H","Content-Type: application/json","--data",json.dumps(body)]
     if origin: args+=["-H","Origin: "+origin]
     return out(*args,"https://myrinvoice.com"+path)
+def wait_native_status(expected):
+    # nginx reload returns before its new workers necessarily serve requests.
+    # Verify both upstream and public TLS route, without relaxing the auth gate.
+    path="/native/auth/me"
+    last_local=last_public="not checked"
+    for _ in range(30):
+        try:
+            last_local=out("curl","--noproxy","*","--max-time","3","-sS","-o","/dev/null","-w","%{http_code}","http://127.0.0.1:8767"+path)
+            last_public=https("/api/myr"+path)
+            if last_local==last_public==expected:
+                print("MYR_NATIVE_ROUTE_HTTP",last_local,last_public,flush=True)
+                return
+        except subprocess.CalledProcessError:
+            pass
+        time.sleep(1)
+    raise RuntimeError("Native routing mismatch: expected "+expected+"; upstream="+last_local+"; public="+last_public)
+
 def health(expected):
     for _ in range(20):
         try:
@@ -64,6 +81,9 @@ def config_for_pilot(original):
     proxy_set_header Host $host;
     proxy_set_header Authorization "";
     proxy_set_header Cookie $http_cookie;
+    proxy_intercept_errors off;
+    proxy_cache off;
+    proxy_next_upstream off;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $remote_addr;
     proxy_set_header X-Forwarded-Proto https;
@@ -173,7 +193,7 @@ def main():
                 run("sudo","install","-m","0644",new,CONF)
                 run("sudo","nginx","-t")
                 run("sudo","systemctl","reload","nginx")
-                check(https("/api/myr/native/auth/me")=="503","Native auth not safely gated")
+                wait_native_status("503")
                 link(web)
                 page=run("curl","--noproxy","*","--resolve","myrinvoice.com:443:127.0.0.1","--max-time","15","-fsS","https://myrinvoice.com/",stdout=subprocess.PIPE).stdout
                 check(page==(web/"index.html").read_bytes(),"Wrong public website")
@@ -181,7 +201,7 @@ def main():
                 opened=True
                 health(True)
                 atomic(FLAG,commit+"\n")
-                check(https("/api/myr/native/auth/me")=="401","Native me must require cookie")
+                wait_native_status("401")
                 check(https("/api/myr/native/auth/signup",{"email":"invalid-address"},"https://myrinvoice.com")=="422","Invalid signup must be rejected")
                 # Existing account is not changed and no mail is sent by a duplicate signup.
                 check(https("/api/myr/native/auth/signup",{"email":"invoicesmyr@gmail.com"},"https://myrinvoice.com")=="202","Public signup endpoint unavailable")
@@ -214,7 +234,7 @@ def main():
                 if STATE.exists(): shutil.rmtree(STATE)
                 shutil.rmtree(prod,ignore_errors=True)
                 shutil.rmtree(web,ignore_errors=True)
-                print("MYR_PILOT_STOPPED_BEFORE_RELEASE; previous production retained",flush=True)
+                print("MYR_PUBLIC_AUTH_STOPPED_BEFORE_RELEASE; previous production retained",flush=True)
                 raise
 
 if __name__=="__main__": main()
