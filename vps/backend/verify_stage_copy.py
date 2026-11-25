@@ -3,9 +3,9 @@ from app import connect
 from psycopg import sql
 
 with connect() as conn:
+    conn.execute("SET TRANSACTION READ ONLY")
     if conn.execute("SELECT current_database(),current_user").fetchone()!=("myrinvoice","myrinvoice_app"):
         raise SystemExit("Wrong database")
-    conn.execute("SET TRANSACTION READ ONLY")
     for table in ("users","companies","company_members","lhdn_documents","lhdn_events","public_links","audit_logs","migration_source_archive"):
         count=conn.execute(sql.SQL("SELECT count(*) FROM myr_native.{}").format(sql.Identifier(table))).fetchone()[0]
         print(f"{table}: {count}")
