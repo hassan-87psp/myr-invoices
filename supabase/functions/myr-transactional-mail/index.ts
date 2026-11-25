@@ -44,7 +44,20 @@ Deno.serve(async req=>{
   if(!data||typeof data!=="object"||Array.isArray(data))return reply(400,{accepted:false});
   const event=data.event;
   let to:string,subject:string,html:string,text:string;
-  if(event==="test"){
+  const welcome=["Welcome to MYR Invoice","Welcome aboard","Your email is verified. Sign in to create invoices and manage your business."] as const;
+  const validRecipient=(v:unknown)=>typeof v==="string"&&v.length<=254&&/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(v);
+  if(["test_verify","test_reset","test_welcome"].includes(event)){
+    if(Object.keys(data).length!==1)return reply(422,{accepted:false});
+    to=testRecipient;
+    const t=event==="test_verify"?templates.verify_email:event==="test_reset"?templates.reset_password:welcome;
+    subject="[Preview] "+t[0];
+    text=t[2]+"\n\nDelivery preview only. No account was created or changed.";
+    html=render(t[1],text,"","","");
+  }else if(event==="welcome"){
+    if(Deno.env.get("MYR_ACCOUNT_MAIL_ENABLED")!=="true")return reply(503,{accepted:false,code:"ACCOUNT_MAIL_NOT_RELEASED"});
+    if(Object.keys(data).length!==2||!validRecipient(data.recipient))return reply(422,{accepted:false});
+    to=data.recipient;subject=welcome[0];text=welcome[2];html=render(welcome[1],text,"","","");
+  }else if(event==="test"){
     if(Object.keys(data).length!==1)return reply(422,{accepted:false});
     to=testRecipient;subject="MYR Invoice — Email connection test";
     text="Your MYR Invoice email delivery connection is being tested. No account action is requested.";
@@ -69,7 +82,9 @@ Deno.serve(async req=>{
     const result=await transport.sendMail({from:{name:fromName,address:from},to,subject,html,text,disableFileAccess:true,disableUrlAccess:true});
     if(!Array.isArray(result.accepted)||result.accepted.length!==1||result.rejected?.length)
       return reply(502,{accepted:false,code:"SMTP_RECIPIENT_REJECTED"});
-    return reply(200,{accepted:true});
+    // Test-only trace: SMTP queue identifier, never log raw SMTP replies.
+    const trace=typeof result.response==="string"?result.response.match(/(?:queued as|id=)\s*([A-Za-z0-9._-]{1,100})/i)?.[1]:undefined;
+    return reply(200,{accepted:true,...(typeof event==="string"&&event.startsWith("test")&&trace?{queue_id:trace}:{})});
   }catch(error){
     const e=error as {code?:string,responseCode?:number};
     const code=e.code==="EAUTH"?"SMTP_AUTH_FAILED":e.code==="ETIMEDOUT"?"SMTP_TIMEOUT":
