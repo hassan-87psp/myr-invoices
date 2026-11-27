@@ -8,6 +8,7 @@ Staged only. Live release remains connection-only. Do not enable production subm
 - lhdn_saved_invoice_candidate.py: offline mapping of persisted ordinary invoice/customer/company snapshots, integer sen reconciliation with existing UI, explicit foreign exchange rate, approval and no-prior-attempt checks. No DB endpoint or actual authorization lookup; adjustment mapping remains disabled.
 - lhdn_protocol_candidate.py: byte-level hash, single-document envelope, acceptance and status parsing, verification link, cancellation and retry decisions.
 - lhdn_lifecycle_candidate.py: sandbox-only transaction helpers for preparing/reserving an immutable snapshot, uncertain outcomes, acceptance, guarded status synchronization, cancellation planning and polling intervals. No HTTP transport or deployed worker. The caller must enforce transaction commit, trusted response provenance and authorization; imported accounts with disabled native credentials are intentionally excluded until identity review.
+- lhdn_readiness_candidate.py: owner-scoped read-only readiness helper; returns only a safe status and byte count, not document content or provider credentials. No public route yet; SQL/ASGI authorization rehearsal remains required.
 - lhdn_signing_candidate.py: offline X.509 Malaysian organization profile checks, SHA-256 digest material and RSA primitive verified against its own synthetic public key. Not complete XAdES signing; no CA chain/revocation validation or actual credentials.
 - ../lhdn-submission-intents.review.sql: proposed durable tenant-scoped intent storage and database trigger protecting invoice changes/deletion through JSON updates. Not applied; no worker consumes it.
 
@@ -24,6 +25,8 @@ The current review code is not an approved release. Database integration tests m
 7. Require real sandbox intermediary credentials and authorized taxpayer. End-to-end provider acceptance, status polling, cancellation and adjustment reference verification must pass before any release review.
 
 ## Offline tests (no network)
+
+On the VPS run `bash vps/check-lhdn-offline-suite.sh` after updating the checkout. It stops on failure and does not modify the live database, install dependencies or deploy services. The signing dependency check is explicit.
 
     python -B vps/backend/lhdn_protocol_candidate.py
     python -B vps/backend/lhdn_ubl_candidate.py
