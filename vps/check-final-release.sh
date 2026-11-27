@@ -9,6 +9,7 @@ run(){ printf '\n--- %s ---\n' "$1"; shift; if "$@"; then echo PASS; else echo F
 run "CHIP protocol and callback mocks" node supabase/functions/myr-chip-payment/check_release.mjs
 run "CHIP disposable ledger" bash vps/check-chip-disposable-db.sh
 run "Billing view" "$PY" -B vps/backend/chip_billing_view_candidate.py
+run "Billing UI integration build" "$PY" -B vps/backend/build_chip_billing_candidate.py
 run "Subscription renewal policy" "$PY" -B vps/backend/chip_subscription_policy_candidate.py
 run "Manual billing disposable ledger" bash vps/check-billing-disposable-db.sh
 run "Production read-only preflight" "$PY" -B vps/backend/check_launch_preflight.py
