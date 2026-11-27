@@ -12,6 +12,6 @@ run "Billing view" "$PY" -B vps/backend/chip_billing_view_candidate.py
 run "Subscription renewal policy" "$PY" -B vps/backend/chip_subscription_policy_candidate.py
 run "Manual billing disposable ledger" bash vps/check-billing-disposable-db.sh
 run "Production read-only preflight" "$PY" -B vps/backend/check_launch_preflight.py
-echo "Actual CHIP paid sandbox transaction, LHDN provider acceptance, verified email delivery, merchant approval and live billing are independent launch gates."
+if [ "${1:-}" = --test-email ]; then\n  run "Post-DNS single support inbox email" "$PY" -B vps/backend/check_email_after_dns.py\nfi\necho "Actual CHIP paid sandbox transaction, LHDN provider acceptance, verified email delivery, merchant approval and live billing are independent launch gates."
 if [ "$fail" -ne 0 ]; then echo MYR_CONSOLIDATED_REHEARSAL_FAILED; exit 1; fi
 echo MYR_CONSOLIDATED_REHEARSAL_OK
