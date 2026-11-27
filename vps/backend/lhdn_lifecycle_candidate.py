@@ -30,10 +30,10 @@ def row(conn,key,lock=True):
     # Every operation is scoped to exact tenant, invoice and environment.
     value=conn.execute(f"""SELECT company_version,code_number,issuer_tin,document_hash,
         document_bytes,state,submission_uid,provider_uuid,long_id,validated_at,
-        dispatch_started_at,updated_at FROM {TABLE}
+        dispatch_started_at,updated_at,created_by,created_at FROM {TABLE}
         WHERE company_id=%s AND invoice_id=%s AND environment=%s"""+(" FOR UPDATE" if lock else ""),key).fetchone()
     require(value is not None,"Intent unavailable")
-    return dict(zip(("version","code","tin","hash","bytes","state","submission","uuid","long_id","validated_at","started","updated_at"),value))
+    return dict(zip(("version","code","tin","hash","bytes","state","submission","uuid","long_id","validated_at","started","updated_at","created_by","created_at"),value))
 
 def clock(value):
     require(isinstance(value,datetime) and value.tzinfo is not None,"Trusted UTC time required")
@@ -82,6 +82,16 @@ def reserve(conn,company_id,invoice_id,environment,version,now):
     require(company is not None and company[0]==version and company[2]=="active","Company changed")
     x=row(conn,key)
     require(x["state"]=="prepared" and x["version"]==version and x["tin"]==company[1],"Intent cannot be reserved")
+    require(timedelta(0)<=clock(now)-clock(x["created_at"])<=timedelta(minutes=15),"Prepared intent expired; operator review required")
+    # The original owner must remain active when the worker reserves the intent.
+    active=conn.execute("""SELECT 1 FROM myr_native.users u
+        JOIN myr_native.company_members m ON m.email=u.email
+        WHERE u.id=%s AND u.disabled=false AND u.email_verified_at IS NOT NULL
+          AND NOT u.is_platform_admin AND m.company_id=%s AND m.role='Owner'
+          AND m.status='active' FOR SHARE OF u,m""",(x["created_by"],key[0])).fetchone()
+    require(active is not None,"Preparing owner authorization changed")
+    require(conn.execute("""SELECT 1 FROM myr_native.lhdn_documents
+        WHERE company_id=%s AND invoice_id=%s""",key[:2]).fetchone() is None,"Existing official document")
     raw=bytes(x["bytes"])
     require(sha256(raw).hexdigest()==x["hash"],"Stored document damaged")
     payload=make_submission(raw,x["code"])
