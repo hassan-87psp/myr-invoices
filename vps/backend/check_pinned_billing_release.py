@@ -53,7 +53,12 @@ def main():
         code="""from business_api import api
 from chip_vps_bridge_candidate import require_sandbox
 from fastapi import HTTPException
-actual={m+' '+r.path for r in api.routes if r.path.startswith('/billing/') for m in r.methods}
+# FastAPI versions can store included routers lazily rather than flat APIRoutes.
+# Build OpenAPI in-process only; the public schema endpoint stays disabled.
+assert api.openapi_url is None
+actual={method.upper()+' '+path for path,operations in api.openapi()["paths"].items()
+        if path.startswith('/billing/') for method in operations
+        if method in ('get','post','put','patch','delete','head','options','trace')}
 assert actual=="""+repr(expected)+"""
 try:require_sandbox()
 except HTTPException as e:assert e.status_code==503
