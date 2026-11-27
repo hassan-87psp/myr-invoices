@@ -47,5 +47,39 @@ def main():
         reject(c,lambda:admin_history(c,other))
         assert len(admin_history(c,admin))==2
         c.rollback()
+        from chip_checkout_orchestration_candidate import create_checkout,reconcile_checkout
+        third,fourth=uuid4(),uuid4()
+        for cid in (third,fourth):
+            c.execute("INSERT INTO myr_native.companies(id,plan,status) VALUES(%s,'Starter','active')",(cid,))
+        c.commit()
+        calls=[]; provider=str(uuid4())
+        def bridge(req):
+            calls.append(req)
+            amount={"Starter":900,"Pro":1900,"Business":3900}[req["plan"]]
+            # The dispatch state must already be committed before the external call.
+            with connect() as reader:
+                state=reader.execute("SELECT state FROM myr_native.chip_test_intents WHERE id=%s",(req["intent_id"],)).fetchone()[0]
+                assert state in ("dispatching","created","verified_test_paid")
+            base={"ok":True,"is_test":True,"amount_sen":amount,"intent_id":req["intent_id"],
+                  "purchase_id":provider,"entitlement_changed":False}
+            if req["action"]=="create_reserved_test":
+                return {**base,"status":"created","checkout_url":"https://gate.chip-in.asia/p/"+provider+"/"}
+            return {**base,"status":"paid","verified_test_paid":True}
+        result=create_checkout(c,admin,third,"Business",bridge)
+        assert result["status"]=="created" and result["entitlement_changed"] is False
+        iid=result["intent_id"]
+        assert reconcile_checkout(c,admin,iid,bridge)["status"]=="verified_test_paid"
+        assert reconcile_checkout(c,admin,iid,bridge)["status"]=="verified_test_paid"
+        assert sum(x["action"]=="create_reserved_test" for x in calls)==1
+        assert c.execute("SELECT count(*) FROM myr_native.chip_test_receipts WHERE intent_id=%s",(iid,)).fetchone()==(1,)
+        assert c.execute("SELECT plan FROM myr_native.companies WHERE id=%s",(third,)).fetchone()==("Starter",)
+        c.commit()
+        def lost(req):raise TimeoutError("simulated network timeout")
+        result=create_checkout(c,admin,fourth,"Pro",lost)
+        assert result["status"]=="reconciliation_required"
+        assert c.execute("SELECT state FROM myr_native.chip_test_intents WHERE id=%s",(result["intent_id"],)).fetchone()==("outcome_unknown",)
+        reject(c,lambda:reserve(c,admin,fourth,"Starter"),UniqueViolation)
+        c.rollback()
     print("MYR_CHIP_TEST_LEDGER_DISPOSABLE_OK")
+    print("MYR_CHIP_CHECKOUT_ORCHESTRATION_MOCK_OK")
 if __name__=="__main__":main()
