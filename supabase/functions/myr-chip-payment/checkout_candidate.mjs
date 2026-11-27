@@ -20,7 +20,10 @@ function checkPurchase(intent,brand,purchase){
    require(purchase.checkout_url===u,"Unsafe checkout URL");
    return {status:"created",provider_id:purchase.id,checkout_url:u,entitlement_changed:false};
  }
- if(purchase.status==="paid")return {status:"verified_test_paid",provider_id:purchase.id,entitlement_changed:false};
+ if(purchase.status==="paid"){
+   require(purchase.payment?.amount===intent.amount_sen,"Actual paid amount mismatch");
+   return {status:"verified_test_paid",provider_id:purchase.id,entitlement_changed:false};
+ }
  return {status:"unsettled",provider_id:purchase.id,entitlement_changed:false};
 }
 export {makePurchase,checkPurchase,catalog};
