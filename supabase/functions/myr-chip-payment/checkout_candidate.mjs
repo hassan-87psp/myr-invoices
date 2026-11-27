@@ -21,7 +21,7 @@ function checkPurchase(intent,brand,purchase){
    return {status:"created",provider_id:purchase.id,checkout_url:u,entitlement_changed:false};
  }
  if(purchase.status==="paid"){
-   require(purchase.payment?.amount===intent.amount_sen,"Actual paid amount mismatch");
+   require(purchase.marked_as_paid===false&&purchase.payment?.is_outgoing===false&&purchase.payment?.currency==="MYR"&&purchase.payment?.amount===intent.amount_sen,"Actual incoming payment mismatch");
    return {status:"verified_test_paid",provider_id:purchase.id,entitlement_changed:false};
  }
  return {status:"unsettled",provider_id:purchase.id,entitlement_changed:false};
