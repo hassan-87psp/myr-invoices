@@ -4,18 +4,20 @@ are admin-only and explicitly gated. This router does not expose a live payment 
 """
 from uuid import UUID
 from fastapi import APIRouter,Depends,HTTPException,Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 from psycopg.errors import UniqueViolation
-from billing_ledger_candidate import owner_history
+from billing_ledger_candidate import owner_history, CATALOG
 from chip_test_lifecycle_candidate import admin_history
 from chip_checkout_orchestration_candidate import create_checkout,reconcile_checkout
 from chip_billing_view_candidate import admin_view
 
 class SandboxCheckout(BaseModel):
+    model_config=ConfigDict(extra="forbid")
     company_id:UUID
-    plan:str
+    plan:str=Field(max_length=16)
 
 class SandboxVerify(BaseModel):
+    model_config=ConfigDict(extra="forbid")
     intent_id:UUID
 
 def build_router(db,identity,owner_company,admin_identity,require_sandbox,bridge):
@@ -47,6 +49,7 @@ def build_router(db,identity,owner_company,admin_identity,require_sandbox,bridge
         guard_origin(request)
         profile=admin_identity(conn,request)
         require_sandbox()
+        if body.plan not in CATALOG:raise HTTPException(422,"Unknown plan")
         try:return create_checkout(conn,profile["id"],body.company_id,body.plan,bridge)
         except (ValueError,UniqueViolation):
             conn.rollback()
