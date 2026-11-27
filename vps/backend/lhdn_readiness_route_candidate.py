@@ -37,7 +37,30 @@ if __name__=="__main__":
     import unittest
     from unittest.mock import patch
     from fastapi import FastAPI
-    from fastapi.testclient import TestClient
+    import asyncio
+    import json
+    from types import SimpleNamespace
+    async def asgi_post(app,body,headers):
+        payload=json.dumps(body).encode("utf-8")
+        scope={"type":"http","asgi":{"version":"3.0","spec_version":"2.4"},
+               "http_version":"1.1","method":"POST","scheme":"https",
+               "path":"/lhdn/readiness","raw_path":b"/lhdn/readiness","root_path":"",
+               "query_string":b"","client":("127.0.0.1",12345),"server":("myrinvoice.com",443),
+               "headers":[(b"content-type",b"application/json"),(b"content-length",str(len(payload)).encode())]+
+                         [(k.lower().encode(),v.encode()) for k,v in headers.items()]}
+        sent=False;messages=[]
+        async def receive():
+            nonlocal sent
+            if not sent:
+                sent=True
+                return {"type":"http.request","body":payload,"more_body":False}
+            return {"type":"http.disconnect"}
+        async def send(message):
+            messages.append(message)
+        await app(scope,receive,send)
+        status=next(m["status"] for m in messages if m["type"]=="http.response.start")
+        data=b"".join(m.get("body",b"") for m in messages if m["type"]=="http.response.body")
+        return SimpleNamespace(status_code=status,json=lambda:json.loads(data))
     class Conn:
         def execute(self,sql):
             if sql!="SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY":
@@ -53,11 +76,11 @@ if __name__=="__main__":
                 if not self.enabled:raise HTTPException(503)
             app=FastAPI()
             app.include_router(router_factory(db,identity,gate))
-            self.client=TestClient(app)
+            self.app=app
             self.headers={"Origin":"https://myrinvoice.com","Authorization":"Bearer synthetic"}
             self.body={"p_company_id":str(self.company),"p_invoice_id":"INV1","p_version":1,"p_total_sen":1000}
         def post(self,body=None,headers=None):
-            return self.client.post("/lhdn/readiness",json=self.body if body is None else body,headers=self.headers if headers is None else headers)
+            return asyncio.run(asgi_post(self.app,self.body if body is None else body,self.headers if headers is None else headers))
         def test_success_is_not_submission(self):
             with patch(__name__+".readiness",return_value={"status":"offline_preview_ready","submission_enabled":False}) as check:
                 r=self.post()
