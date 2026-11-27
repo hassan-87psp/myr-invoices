@@ -80,6 +80,27 @@ def main():
         assert c.execute("SELECT state FROM myr_native.chip_test_intents WHERE id=%s",(result["intent_id"],)).fetchone()==("outcome_unknown",)
         reject(c,lambda:reserve(c,admin,fourth,"Starter"),UniqueViolation)
         c.rollback()
+    # Fresh synthetic schema for route-level integration, in the same disposable cluster.
+    with connect() as c:
+        c.execute("DROP SCHEMA myr_native CASCADE")
+        c.execute("""CREATE SCHEMA myr_native;
+          CREATE TABLE myr_native.users(id uuid PRIMARY KEY,email text UNIQUE NOT NULL,name text,
+             disabled boolean DEFAULT false,email_verified_at timestamptz,is_platform_admin boolean DEFAULT false);
+          CREATE TABLE myr_native.companies(id uuid PRIMARY KEY,plan text NOT NULL,status text NOT NULL,data jsonb NOT NULL DEFAULT '{}');
+          CREATE TABLE myr_native.company_members(company_id uuid REFERENCES myr_native.companies(id),
+             email text REFERENCES myr_native.users(email),role text NOT NULL,status text NOT NULL,PRIMARY KEY(company_id,email));""")
+        root=Path(__file__).resolve().parent.parent
+        for sql in ("billing-ledger.review.sql","chip-test-ledger.review.sql"):
+            c.execute((root/sql).read_text())
+        admin,owner,other,company,second=(uuid4() for _ in range(5))
+        for uid,flag in ((admin,True),(owner,False),(other,False)):
+            c.execute("INSERT INTO myr_native.users(id,email,email_verified_at,is_platform_admin) VALUES(%s,%s,now(),%s)",(uid,uid.hex+"@example.invalid",flag))
+        for cid,uid in ((company,owner),(second,other)):
+            c.execute("INSERT INTO myr_native.companies(id,plan,status) VALUES(%s,'Starter','active')",(cid,))
+            c.execute("INSERT INTO myr_native.company_members VALUES(%s,%s,'Owner','active')",(cid,uid.hex+"@example.invalid"))
+        c.commit()
+    from check_chip_billing_integration import exercise
+    exercise(admin,owner,other,company,second)
     print("MYR_CHIP_TEST_LEDGER_DISPOSABLE_OK")
     print("MYR_CHIP_CHECKOUT_ORCHESTRATION_MOCK_OK")
 if __name__=="__main__":main()
