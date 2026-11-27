@@ -25,7 +25,9 @@ def main():
     current=Path("/var/www/myrinvoice.com/auto/current").resolve(strict=True)
     assert current.parent==Path("/var/www/myrinvoice.com/auto/releases"),"Unexpected public root"
     raw=(current/"index.html").read_text()
-    assert "function myrAuthHeaders(" in raw,"Native frontend auth helper missing"
+    # The reviewed native adapter declares myrAuthHeaders as an arrow function.
+    assert re.search(r"\b(?:const|let|var)\s+myrAuthHeaders\s*=|\bfunction\s+myrAuthHeaders\s*\(",raw),"Native frontend auth helper missing"
+    assert "session.native" in raw and "myrNativeAuth" in raw,"Native cookie auth adapter missing"
     html=transform(raw)
     for attrs,code in re.findall(r"<script([^>]*)>(.*?)</script>",html,re.S|re.I):
         if code.strip() and "application/ld+json" not in attrs and "application/json" not in attrs:
