@@ -130,7 +130,7 @@ def cancellation_request(receipt,status,validated_at,now,reason,window_hours=72)
     require(isinstance(now,datetime) and now.tzinfo is not None,"Timezone required")
     validated=parse_time(validated_at)
     require(validated<=now<validated+timedelta(hours=window_hours),"Cancellation window closed")
-    text_value(reason,500)
+    text_value(reason,300)
     return "/api/v1.0/documents/state/"+identifier(receipt.uuid)+"/state",{"status":"cancelled","reason":reason}
 
 def retry_after(header,now=None):
@@ -193,6 +193,7 @@ class ContractTests(unittest.TestCase):
         now=parse_time("2026-11-28T23:59:59Z")
         self.assertEqual(cancellation_request(self.receipt,"Valid","2026-11-26T00:00:00Z",now,"Wrong details")[1]["status"],"cancelled")
         with self.assertRaises(ValueError):cancellation_request(self.receipt,"Valid","2026-11-26T00:00:00Z",now+timedelta(seconds=1),"Wrong details")
+        with self.assertRaises(ValueError):cancellation_request(self.receipt,"Valid","2026-11-26T00:00:00Z",now,"x"*301)
     def test_retries(self):
         self.assertEqual(retry_after("90"),90)
         self.assertEqual(retry_after(None),60)
