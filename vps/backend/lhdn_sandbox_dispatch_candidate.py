@@ -6,7 +6,7 @@ from datetime import datetime,timezone,timedelta
 from urllib.request import Request,build_opener,ProxyHandler,HTTPSHandler
 from urllib.error import HTTPError
 from hashlib import sha256
-import json,re,ssl
+import json,re,ssl,os
 from uuid import UUID
 import business_lhdn as central
 from lhdn_lifecycle_candidate import reserve,row,accept,outcome_unknown,scoped
@@ -42,8 +42,9 @@ def post_once(g,payload):
     require(isinstance(result,dict) and result.get("state")=="accepted" and result.get("http_status")==202,"Dispatch requires reconciliation")
     return result["receipt"]
 def check_database(conn):
-    identity=conn.execute("SELECT current_database(),current_user").fetchone()
-    require(identity==("myr_lhdn_sandbox","myr_lhdn_sandbox_worker"),"Only isolated sandbox worker DB is permitted")
+    require(not os.environ.get("MYR_PRODUCTION_RELEASE"),"Production release cannot use sandbox dispatch")
+    identity=conn.execute("SELECT current_database(),current_user,inet_server_addr()::text").fetchone()
+    require(identity[:2]==("myr_lhdn_sandbox","myr_lhdn_sandbox_worker") and identity[2] in (None,"127.0.0.1/32","::1/128","127.0.0.1","::1"),"Only isolated local sandbox worker DB is permitted")
     conn.commit()
 def bind(conn,key):
     company=conn.execute("SELECT tin,data->>'brn' FROM myr_native.companies WHERE id=%s AND status='active' FOR UPDATE",(key[0],)).fetchone()
@@ -66,7 +67,12 @@ def run_once(connect,company_id,invoice_id,version):
         with connect() as c:
             check_database(c)
             tin,brn,x=bind(c,key)
-            require(x["state"]=="dispatching","Reservation changed")
+            require(x["state"]=="dispatching" and x["version"]==version,"Reservation changed")
+            current=c.execute("""SELECT 1 FROM myr_native.companies co JOIN myr_native.company_members m ON m.company_id=co.id
+                JOIN myr_native.users u ON u.email=m.email WHERE co.id=%s AND co.version=%s AND co.status='active'
+                AND u.id=%s AND u.disabled=false AND u.email_verified_at IS NOT NULL AND NOT u.is_platform_admin
+                AND m.role='Owner' AND m.status='active' FOR SHARE OF co,m,u""",(key[0],version,x["created_by"])).fetchone()
+            require(current is not None,"Owner or company revision changed before dispatch")
             verify_grant(g,key[0],tin,brn,x,datetime.now(timezone.utc))
         receipt=post_once(g,payload)
         with connect() as c:
