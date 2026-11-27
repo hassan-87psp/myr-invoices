@@ -19,6 +19,14 @@ Staged only. Live release remains connection-only. Do not enable production subm
 - `~/myr-venv/bin/python -B vps/backend/build_native_auth_candidate.py` followed by `~/myr-venv/bin/python -B vps/backend/build_lhdn_readiness_candidate.py` generates a private UI candidate and checks JavaScript syntax. The readiness route must be mounted on a separate authenticated test API before browser acceptance testing; do not publish the candidate HTML.
 - Offline suite at fb08b8e: 41 tests passed on the VPS (including 5 synthetic signing tests), per operator terminal. New integration tests have not been executed yet.
 
+## Latest integration evidence
+
+- At f683eaf, operator VPS output confirmed 65/65 unit/mock/ASGI tests and both disposable database and private UI syntax rehearsals passed. No full production-schema or browser acceptance test has occurred.
+- The worker rehearsal remains mock-only. The new `supabase/functions/myr-lhdn-intermediary/sandbox_transport_candidate.ts` implements fixed-host HTTP submit and poll calls for an explicitly granted single v1.0 ordinary invoice. It is **not imported by the existing deployed connector**, and no transport flags or grants have been configured. The caller must bind a committed reservation to the trusted grant and token, enforce distributed rate limits and revocation, and persist poll receipts. Never accept grant fields from the browser. No automatic write retry after HTTP 422 or uncertainty.
+- Test the transport with `~/.deno/bin/deno test supabase/functions/myr-lhdn-intermediary/sandbox_transport_candidate_test.ts`. Tests use mocked fetch only. 
+- Official SDK confirms HTTP 202 is initial acceptance, not final Valid status; Get Submission should be polled at 3–5 second intervals subject to provider throttling. Existing conservative single-document pilot uses a 250 KB bound below the provider 300 KB maximum.
+- Official login and environment references: https://sdk.myinvois.hasil.gov.my/api/08-login-as-intermediary-system/ and https://sdk.myinvois.hasil.gov.my/faq/
+
 ## Required before any submission
 
 The current review code is not an approved release. Database integration tests must use a separate disposable database, including concurrent prepare/edit, duplicate reservation, revocation, rollback, crash recovery and cross-company checks. Do not connect a browser route to any transaction or send request yet. Sandbox-only intent results must not appear as production UUIDs or QR codes.
