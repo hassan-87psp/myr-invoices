@@ -1,4 +1,4 @@
-"""Offline UBL 2.1 JSON candidate for domestic MYR business invoices.
+"""Offline UBL 2.1 JSON candidate for domestic business invoices in selected currencies.
 Not an LHDN-approved document generator. No network, database or signing.
 Requires a trusted normalized snapshot, explicit tax/classification choices,
 and independently confirmed invoice total. Unsupported cases fail closed.
@@ -29,8 +29,8 @@ def cents(d):
 def leaf(value,**attrs):
     return [{"_":value,**attrs}]
 
-def money(value):
-    return leaf(cents(value),currencyID="MYR")
+def money(value,currency="MYR"):
+    return leaf(cents(value),currencyID=currency)
 
 def exact_json(value):
     # Decimal is emitted as a JSON number, not a float or quoted amount.
@@ -80,55 +80,82 @@ def party(value,supplier):
 def category(code):
     return [{"ID":leaf(code),"TaxScheme":[{"ID":leaf("OTH",schemeID="UN/ECE 5153",schemeAgencyID="6")}]}]
 
-def subtotal(code,net,tax,rate=None):
-    s={"TaxableAmount":money(net),"TaxAmount":money(tax),"TaxCategory":category(code)}
+def subtotal(code,net,tax,rate=None,currency="MYR"):
+    s={"TaxableAmount":money(net,currency),"TaxAmount":money(tax,currency),"TaxCategory":category(code)}
     if rate is not None and code!="06":s["Percent"]=leaf(rate)
     return s
 
 def generate(snapshot,now):
-    fields(snapshot,"number issue_at currency document_type supplier buyer lines expected_total")
-    require(snapshot["currency"]=="MYR" and snapshot["document_type"]=="01","Only ordinary MYR invoices supported")
+    require(isinstance(snapshot,dict),"Normalized snapshot required")
+    mandatory=set("number issue_at currency document_type supplier buyer lines expected_total".split())
+    require(mandatory<=set(snapshot)<=mandatory|{"fx_rate","rounding"},"Unsupported or missing normalized fields")
+    currency=snapshot["currency"]
+    require(currency in ("MYR","USD","SGD","EUR","GBP","AUD","CNY","HKD","JPY"),"Unsupported currency")
+    require(snapshot["document_type"]=="01","Only ordinary invoices supported")
+    fx=dec(snapshot.get("fx_rate","0"),8)
+    require((currency=="MYR" and fx==0) or (currency!="MYR" and fx>0),"Explicit foreign currency exchange rate required")
+    rounding_raw=snapshot.get("rounding","0")
+    require(type(rounding_raw) in (int,str,Decimal),"Explicit decimal rounding required")
+    try: rounding=Decimal(rounding_raw)
+    except InvalidOperation: raise ValueError("Invalid rounding") from None
+    require(rounding.is_finite() and abs(rounding)<=1 and rounding==cents(rounding),"Unsupported rounding adjustment")
+    def amount(v): return money(v,currency)
     require(isinstance(now,datetime) and now.tzinfo is not None,"Trusted UTC clock required")
     issued=datetime.fromisoformat(snapshot["issue_at"].replace("Z","+00:00"))
     require(issued.tzinfo is not None,"Invoice issue timezone required")
     issued=issued.astimezone(timezone.utc)
     require(now-timedelta(hours=72)<=issued<=now,"Issue time outside conservative pilot window")
-    number=text_value(snapshot["number"],80)
+    number=text_value(snapshot["number"],50)
     require(isinstance(snapshot["lines"],list) and 1<=len(snapshot["lines"])<=100,"Invalid line count")
     supplier=party(snapshot["supplier"],True)
     buyer=party(snapshot["buyer"],False)
     require(snapshot["supplier"]["tin"]!=snapshot["buyer"]["tin"],"Same-party invoices not supported")
     lines=[]; groups=defaultdict(lambda:[ZERO,ZERO]); net_total=ZERO; tax_total=ZERO
     for i,x in enumerate(snapshot["lines"],1):
-        fields(x,"description classification quantity unit_price tax_type tax_rate")
+        mandatory_line=set("description classification quantity unit_price tax_type tax_rate".split())
+        require(isinstance(x,dict) and mandatory_line<=set(x)<=mandatory_line|{"discount","charge","unit_code"},"Unsupported line fields")
+        discount=dec(x.get("discount","0"));charge=dec(x.get("charge","0"))
         qty=dec(x["quantity"],5); price=dec(x["unit_price"])
         require(qty>0 and price>0,"Positive quantities and prices required")
         code=x["tax_type"]; rate=dec(x["tax_rate"],4)
         require(code in ("01","02","06") and (rate==0 if code=="06" else 0<rate<=100),"Unsupported tax treatment")
-        net=cents(qty*price);tax=cents(net*rate/100)
+        require(code=="06" or snapshot["supplier"]["sst"]!="NA","SST registration required for taxable lines")
+        gross=cents(qty*price)
+        require(discount<=gross,"Discount exceeds line subtotal")
+        net=gross-discount+charge;tax=cents(net*rate/100)
         require(net>0,"Zero-value line outside pilot")
         groups[code][0]+=net;groups[code][1]+=tax
         net_total+=net;tax_total+=tax
-        lines.append({
-            "ID":leaf(str(i)),"InvoicedQuantity":leaf(qty),
-            "LineExtensionAmount":money(net),
-            "TaxTotal":[{"TaxAmount":money(tax),"TaxSubtotal":[subtotal(code,net,tax,rate)]}],
+        unit=pattern(x.get("unit_code","C62"),r"[A-Z0-9]{2,3}","Unit code required")
+        line={
+            "ID":leaf(str(i)),"InvoicedQuantity":leaf(qty,unitCode=unit),
+            "LineExtensionAmount":amount(net),
+            "TaxTotal":[{"TaxAmount":amount(tax),"TaxSubtotal":[subtotal(code,net,tax,rate,currency)]}],
             "Item":[{"Description":leaf(text_value(x["description"],300)),
                      "CommodityClassification":[{"ItemClassificationCode":leaf(pattern(x["classification"],r"[0-9]{3}","Classification required"),listID="CLASS")}]}],
-            "Price":[{"PriceAmount":money(price)}],
-            "ItemPriceExtension":[{"Amount":money(net)}]
-        })
+            "Price":[{"PriceAmount":amount(price)}],
+            "ItemPriceExtension":[{"Amount":amount(gross)}]
+        }
+        adjustments=[]
+        if discount: adjustments.append({"ChargeIndicator":leaf(False),"AllowanceChargeReason":leaf("Discount"),"Amount":amount(discount)})
+        if charge: adjustments.append({"ChargeIndicator":leaf(True),"AllowanceChargeReason":leaf("Fee"),"Amount":amount(charge)})
+        if adjustments: line["AllowanceCharge"]=adjustments
+        lines.append(line)
     total=net_total+tax_total
-    require(total==dec(snapshot["expected_total"]),"Confirmed invoice total differs from computed total")
+    payable=total+rounding
+    require(payable>0 and payable==dec(snapshot["expected_total"]),"Confirmed invoice total differs from computed total")
     invoice={
         "ID":leaf(number),"IssueDate":leaf(issued.date().isoformat()),"IssueTime":leaf(issued.strftime("%H:%M:%SZ")),
-        "InvoiceTypeCode":leaf("01",listVersionID="1.0"),"DocumentCurrencyCode":leaf("MYR"),
+        "InvoiceTypeCode":leaf("01",listVersionID="1.0"),"DocumentCurrencyCode":leaf(currency),
         "AccountingSupplierParty":supplier,"AccountingCustomerParty":buyer,
-        "TaxTotal":[{"TaxAmount":money(tax_total),"TaxSubtotal":[subtotal(code,*groups[code]) for code in sorted(groups)]}],
-        "LegalMonetaryTotal":[{"LineExtensionAmount":money(net_total),"TaxExclusiveAmount":money(net_total),
-            "TaxInclusiveAmount":money(total),"PayableAmount":money(total)}],
+        "TaxTotal":[{"TaxAmount":amount(tax_total),"TaxSubtotal":[subtotal(code,*groups[code],currency=currency) for code in sorted(groups)]}],
+        "LegalMonetaryTotal":[{"LineExtensionAmount":amount(net_total),"TaxExclusiveAmount":amount(net_total),
+            "TaxInclusiveAmount":amount(total),"PayableAmount":amount(payable)}],
         "InvoiceLine":lines
     }
+    if rounding: invoice["LegalMonetaryTotal"][0]["PayableRoundingAmount"]=amount(rounding)
+    if currency!="MYR":
+        invoice["TaxExchangeRate"]=[{"SourceCurrencyCode":leaf(currency),"TargetCurrencyCode":leaf("MYR"),"CalculationRate":leaf(fx)}]
     root={"_D":"urn:oasis:names:specification:ubl:schema:xsd:Invoice-2",
         "_A":"urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2",
         "_B":"urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2","Invoice":[invoice]}
@@ -140,7 +167,7 @@ class GeneratorTests(unittest.TestCase):
         p={"name":"Synthetic Sdn Bhd","tin":"C1234567890","brn":"202001234567","sst":"NA","phone":"+60312345678","email":"",
            "address":{"line":"Test street","city":"Petaling Jaya","postcode":"47810","state":"10","country":"MYS"}}
         self.s={"number":"TEST-1","issue_at":self.now.isoformat(),"currency":"MYR","document_type":"01",
-          "supplier":{**p,"msic":"46900","msic_description":"Wholesale"},
+          "supplier":{**p,"sst":"A01-1234-56789012","msic":"46900","msic_description":"Wholesale"},
           "buyer":{**p,"tin":"C9876543210","brn":"202001234568"},
           "lines":[{"description":"Fixture","classification":"022","quantity":"3","unit_price":"10.01","tax_type":"02","tax_rate":"8"}],
           "expected_total":"32.43"}
@@ -155,7 +182,7 @@ class GeneratorTests(unittest.TestCase):
         self.s["expected_total"]="32.44"
         with self.assertRaises(ValueError):generate(self.s,self.now)
     def test_unsupported(self):
-        for key,value in (("currency","USD"),("document_type","02"),("discount","10")):
+        for key,value in (("currency","XYZ"),("document_type","02"),("discount","10")):
             with self.assertRaises(ValueError):generate({**self.s,key:value},self.now)
     def test_missing_identity(self):
         self.s["buyer"]["tin"]=""
@@ -165,6 +192,24 @@ class GeneratorTests(unittest.TestCase):
         with self.assertRaises(ValueError):generate(self.s,self.now)
         self.s["lines"][0]["tax_rate"]="0";self.s["expected_total"]="30.03"
         self.assertIn(b'"PayableAmount":[{"_":30.03',generate(self.s,self.now))
+    def test_adjustments(self):
+        self.s["lines"][0].update(discount="3.00",charge="1.00")
+        self.s["rounding"]="0.01"; self.s["expected_total"]="30.28"
+        d=json.loads(generate(self.s,self.now),parse_float=Decimal)["Invoice"][0]
+        self.assertEqual(d["InvoiceLine"][0]["ItemPriceExtension"][0]["Amount"][0]["_"],Decimal("30.03"))
+        self.assertEqual(d["InvoiceLine"][0]["LineExtensionAmount"][0]["_"],Decimal("28.03"))
+        self.assertEqual(d["LegalMonetaryTotal"][0]["PayableAmount"][0]["_"],Decimal("30.28"))
+        self.assertEqual(len(d["InvoiceLine"][0]["AllowanceCharge"]),2)
+    def test_fx(self):
+        self.s["currency"]="USD"
+        with self.assertRaises(ValueError):generate(self.s,self.now)
+        self.s["fx_rate"]="4.123456"
+        d=json.loads(generate(self.s,self.now),parse_float=Decimal)["Invoice"][0]
+        self.assertEqual(d["TaxExchangeRate"][0]["CalculationRate"][0]["_"],Decimal("4.123456"))
+        self.assertEqual(d["LegalMonetaryTotal"][0]["PayableAmount"][0]["currencyID"],"USD")
+    def test_sst_required(self):
+        self.s["supplier"]["sst"]="NA"
+        with self.assertRaises(ValueError):generate(self.s,self.now)
     def test_stale(self):
         with self.assertRaises(ValueError):generate(self.s,self.now+timedelta(days=4))
 
