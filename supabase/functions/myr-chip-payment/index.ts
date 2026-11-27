@@ -7,9 +7,9 @@ const eq = async (a: string,b: string) => {
   let diff=0; for(let i=0;i<x.length;i++) diff |= x[i]^y[i]; return diff===0;
 };
 Deno.serve(async (req: Request) => {
-  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  const supplied = req.headers.get("authorization") || "";
-  if (!service || supplied.length>4096 || !await eq(supplied,"Bearer "+service)) return reply(401,{ok:false,error:"operator_only"});
+  const operator = Deno.env.get("CHIP_OPERATOR_SECRET") || "";
+  const supplied = req.headers.get("x-chip-operator-secret") || "";
+  if (!/^[a-f0-9]{64}$/i.test(operator) || supplied.length!==64 || !await eq(supplied,operator)) return reply(401,{ok:false,error:"operator_only"});
   if(req.method!=="POST") return reply(405,{ok:false,error:"method_not_allowed"});
   const mode=Deno.env.get("CHIP_MODE") || "";
   const key=Deno.env.get("CHIP_TEST_API_KEY") || "";
