@@ -25,3 +25,34 @@ Deno.test("fails closed, isolates customers, caches tokens without exposing them
   assert((await handler(req({...body,environment:"production"}))).status===503 && calls===3);
   assert((await handler(req({...body,action:"submit"}))).status===400 && calls===3);
 });
+
+Deno.test("TIN pilot remains sandbox-only, verifies BRN and never leaks token",async()=>{
+  const settings={...values,MYR_LHDN_SANDBOX_CONNECTION_CHECK_ENABLED:"true"} as Record<string,string>;
+  delete settings.MYR_LHDN_SANDBOX_TIN_VALIDATION_ENABLED;
+  let authCalls=0,validationCalls=0;
+  const mock=(async (url:string,init:RequestInit)=>{
+    const headers=new Headers(init.headers);
+    if(url.endsWith("/connect/token")){
+      authCalls++;
+      assert(headers.get("onbehalfof")==="C1234567890:123456789012");
+      return new Response(JSON.stringify({access_token:"private-test-token",token_type:"Bearer",expires_in:3600}));
+    }
+    validationCalls++;
+    assert(url==="https://preprod-api.myinvois.hasil.gov.my/api/v1.0/taxpayer/validate/C1234567890?idType=BRN&idValue=123456789012");
+    assert(init.method==="GET" && headers.get("Authorization")==="Bearer private-test-token");
+    return new Response(null,{status:200});
+  }) as typeof fetch;
+  const h=createHandler(k=>settings[k],mock);
+  const payload={...body,action:"validate_self_tin",taxpayer:"C1234567890:123456789012",brn:"123456789012"};
+  assert((await h(req(payload))).status===503 && authCalls===0);
+  settings.MYR_LHDN_SANDBOX_TIN_VALIDATION_ENABLED="true";
+  assert((await h(req({...payload,environment:"production"}))).status===503 && authCalls===0);
+  assert((await h(req({...payload,brn:"OTHER"}))).status===400 && authCalls===0);
+  const res=await h(req(payload));const raw=await res.text();
+  assert(res.status===200 && raw.includes("provider_tin") && !raw.includes("private-test-token"));
+  assert((await (await h(req(payload))).json()).verification==="cached_tin");
+  assert(authCalls===1 && validationCalls===1);
+  assert((await h(req({...payload,tenant_id:"00000000-0000-4000-8000-000000000002"}))).status===200);
+  assert(authCalls===2 && validationCalls===2);
+  assert((await h(req({...payload,action:"submit"}))).status===400);
+});
