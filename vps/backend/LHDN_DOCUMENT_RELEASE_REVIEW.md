@@ -12,6 +12,13 @@ Staged only. Live release remains connection-only. Do not enable production subm
 - lhdn_signing_candidate.py: offline X.509 Malaysian organization profile checks, SHA-256 digest material and RSA primitive verified against its own synthetic public key. Not complete XAdES signing; no CA chain/revocation validation or actual credentials.
 - ../lhdn-submission-intents.review.sql: proposed durable tenant-scoped intent storage and database trigger protecting invoice changes/deletion through JSON updates. Not applied; no worker consumes it.
 
+## Private integration rehearsal (not a release)
+
+- `bash vps/check-lhdn-disposable-db.sh` starts an isolated temporary Unix-socket-only PostgreSQL cluster and checks synthetic schema, readiness, intent reservation, snapshot trigger, membership revocation, mock receipts and status transitions. It does not use `app.connect()`, production credentials or real records. Full production-schema compatibility, true concurrent race tests, least-privilege grants and restore tests remain separate.
+- `~/myr-venv/bin/python -B vps/backend/lhdn_readiness_route_candidate.py` runs isolated ASGI fixtures with mocked identity and readiness dependencies; not mounted in the live API.
+- `~/myr-venv/bin/python -B vps/backend/build_native_auth_candidate.py` followed by `~/myr-venv/bin/python -B vps/backend/build_lhdn_readiness_candidate.py` generates a private UI candidate and checks JavaScript syntax. The readiness route must be mounted on a separate authenticated test API before browser acceptance testing; do not publish the candidate HTML.
+- Offline suite at fb08b8e: 41 tests passed on the VPS (including 5 synthetic signing tests), per operator terminal. New integration tests have not been executed yet.
+
 ## Required before any submission
 
 The current review code is not an approved release. Database integration tests must use a separate disposable database, including concurrent prepare/edit, duplicate reservation, revocation, rollback, crash recovery and cross-company checks. Do not connect a browser route to any transaction or send request yet. Sandbox-only intent results must not appear as production UUIDs or QR codes.
