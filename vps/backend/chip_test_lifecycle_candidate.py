@@ -53,7 +53,9 @@ def record_verified_test_paid(conn,actor,iid,result):
     return "verified_test_paid"
 
 def admin_history(conn,actor):
-    admin(conn,actor)
+    # Read-only endpoint cannot acquire row locks; this query checks authorization in the same transaction.
+    require(conn.execute("""SELECT 1 FROM myr_native.users WHERE id=%s
+      AND is_platform_admin AND NOT disabled AND email_verified_at IS NOT NULL""",(actor,)).fetchone(),"Admin required")
     rows=conn.execute("""SELECT id,company_id,plan,amount_sen,currency,state,provider_id,created_at,verified_at
       FROM myr_native.chip_test_intents ORDER BY created_at DESC,id LIMIT 100""").fetchall()
     return [dict(zip(("id","company_id","plan","amount_sen","currency","state","provider_id","created_at","verified_at"),r)) for r in rows]
