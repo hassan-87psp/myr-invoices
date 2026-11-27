@@ -101,6 +101,8 @@ def main():
         c.commit()
     from check_chip_billing_integration import exercise
     exercise(admin,owner,other,company,second)
+    from check_chip_live_activation import exercise as exercise_live_activation
+    exercise_live_activation(admin)
     print("MYR_CHIP_TEST_LEDGER_DISPOSABLE_OK")
     print("MYR_CHIP_CHECKOUT_ORCHESTRATION_MOCK_OK")
 if __name__=="__main__":main()
