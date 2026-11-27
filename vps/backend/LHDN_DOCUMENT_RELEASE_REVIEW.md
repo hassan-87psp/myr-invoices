@@ -27,6 +27,14 @@ Staged only. Live release remains connection-only. Do not enable production subm
 - Official SDK confirms HTTP 202 is initial acceptance, not final Valid status; Get Submission should be polled at 3–5 second intervals subject to provider throttling. Existing conservative single-document pilot uses a 250 KB bound below the provider 300 KB maximum.
 - Official login and environment references: https://sdk.myinvois.hasil.gov.my/api/08-login-as-intermediary-system/ and https://sdk.myinvois.hasil.gov.my/faq/
 
+## Sandbox dispatch wiring (staged)
+
+- Legacy Supabase proxy `lhdn` retired at deployed version 12, exact old version 11 source archived; central connection-only connector remains active at version 4. No production database migration or invoice submission enabled.
+- VPS `lhdn_sandbox_dispatch_candidate.py` now connects a committed isolated sandbox intent to a separate fixed Edge endpoint, rechecks local database identity, owner and revision, and requires an expiring operator grant bound to exact tenant, issuer, code and document SHA-256. No browser/public dispatch route.
+- `sandbox_dispatch_bridge_candidate.ts` and its candidate entrypoint require a distinct private bridge secret, explicit sandbox-only release gate, matching exact grant, fresh provider login, and durable one-shot fence. `vps/lhdn-edge-dispatch-fence.review.sql` is NOT applied. No new Edge dispatch function deployed; no secrets or grants configured. A failed or ambiguous write cannot automatically retry.
+- Run the consolidated private integration suite to test the new Python/TypeScript fixtures, typecheck the candidate entrypoint, and repeat existing disposable database/UI tests. These additional tests have not yet been run. Before real dispatch: rehearse actual fence grants and concurrency, create a separate sandbox database/least-privilege worker role, verify authorization and real schema, configure sandbox credentials and exact pilot grant, and review isolated deployment. Polling/receipt persistence and reconciliation still require end-to-end worker integration; no production status writes.
+- The first real provider submission is blocked on actual authorized sandbox taxpayer and credential setup. A synthetic test pass does not satisfy these gates.
+
 ## Required before any submission
 
 The current review code is not an approved release. Database integration tests must use a separate disposable database, including concurrent prepare/edit, duplicate reservation, revocation, rollback, crash recovery and cross-company checks. Do not connect a browser route to any transaction or send request yet. Sandbox-only intent results must not appear as production UUIDs or QR codes.
