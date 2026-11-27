@@ -20,26 +20,34 @@ Deno.serve(async(req:Request)=>{
  if(!body||typeof body!=="object")return reply(400,{ok:false,error:"invalid_request"});
  const base="https://gate.chip-in.asia/api/v1/";
  const headers={Authorization:"Bearer "+key,Accept:"application/json","Content-Type":"application/json"};
- const create=body.action==="create_test"&&body.confirm==="I_VERIFIED_CHIP_TEST_KEY"&&Object.keys(body).length===2;
- const lookup=body.action==="verify_test"&&uuid(body.purchase_id)&&uuid(body.intent_id)&&Object.keys(body).length===3;
+ const manualCreate=body.action==="create_test"&&body.confirm==="I_VERIFIED_CHIP_TEST_KEY"&&Object.keys(body).length===2;
+ const manualLookup=body.action==="verify_test"&&uuid(body.purchase_id)&&uuid(body.intent_id)&&Object.keys(body).length===3;
+ const prices:Record<string,number>={Starter:900,Pro:1900,Business:3900};
+ const validPlan=typeof body.plan==="string"&&Object.hasOwn(prices,body.plan);
+ const reservedCreate=body.action==="create_reserved_test"&&uuid(body.intent_id)&&validPlan&&body.confirm==="I_VERIFIED_CHIP_TEST_KEY"&&Object.keys(body).length===4;
+ const reservedLookup=body.action==="verify_reserved_test"&&uuid(body.purchase_id)&&uuid(body.intent_id)&&validPlan&&Object.keys(body).length===4;
+ if((reservedCreate||reservedLookup)&&Deno.env.get("CHIP_RESERVED_CHECKOUT_ENABLED")!=="true")return reply(503,{ok:false,error:"reserved_checkout_not_released"});
+ const create=manualCreate||reservedCreate,lookup=manualLookup||reservedLookup;
  if(!create&&!lookup)return reply(400,{ok:false,error:"invalid_action"});
- const intent=create?crypto.randomUUID():body.intent_id;
+ const plan=reservedCreate||reservedLookup?body.plan:"Starter";
+ const amount=prices[plan];
+ const intent=manualCreate?crypto.randomUUID():body.intent_id;
  const reference="myr-test-"+intent;
  try{
    const res=await fetch(base+(create?"purchases/":"purchases/"+body.purchase_id+"/"),{
     method:create?"POST":"GET",headers,redirect:"error",signal:AbortSignal.timeout(15000),
-    ...(create?{body:JSON.stringify({brand_id:brand,reference,client:{email:"test@example.com"},purchase:{currency:"MYR",products:[{name:"MYR Invoice Starter TEST",price:900,quantity:1}]},send_receipt:false,force_recurring:false,success_redirect:"https://myrinvoice.com/",failure_redirect:"https://myrinvoice.com/",cancel_redirect:"https://myrinvoice.com/"})}:{})
+    ...(create?{body:JSON.stringify({brand_id:brand,reference,client:{email:"test@example.com"},purchase:{currency:"MYR",products:[{name:"MYR Invoice "+plan+" TEST",price:amount,quantity:1}]},send_receipt:false,force_recurring:false,success_redirect:"https://myrinvoice.com/",failure_redirect:"https://myrinvoice.com/",cancel_redirect:"https://myrinvoice.com/"})}:{})
    });
    if(!res.ok){await res.body?.cancel();return reply(502,{ok:false,provider_http:res.status,intent_id:intent,do_not_retry_create:create});}
    const p=await res.json();
-   if(p.is_test!==true||p.brand_id!==brand||p.reference!==reference||p.purchase?.currency!=="MYR"||p.purchase?.total!==900||!uuid(p.id)||(!create&&p.id!==body.purchase_id))
+   if(p.is_test!==true||p.brand_id!==brand||p.reference!==reference||p.purchase?.currency!=="MYR"||p.purchase?.total!==amount||!uuid(p.id)||(!create&&p.id!==body.purchase_id))
      return reply(502,{ok:false,error:"test_purchase_verification_failed",intent_id:intent,do_not_retry_create:create});
    if(create){
     const expected="https://gate.chip-in.asia/p/"+p.id+"/";
     if(p.status!=="created"||p.checkout_url!==expected)return reply(502,{ok:false,error:"unexpected_checkout",intent_id:intent,do_not_retry_create:true});
-    return reply(200,{ok:true,is_test:true,amount_sen:900,intent_id:intent,purchase_id:p.id,checkout_url:expected,status:"created",entitlement_changed:false});
+    return reply(200,{ok:true,is_test:true,amount_sen:amount,intent_id:intent,purchase_id:p.id,checkout_url:expected,status:"created",entitlement_changed:false});
    }
-   if(p.status==="paid"&&(p.marked_as_paid!==false||p.payment?.is_outgoing!==false||p.payment?.currency!=="MYR"||p.payment?.amount!==900))return reply(502,{ok:false,error:"paid_amount_mismatch",entitlement_changed:false});
-   return reply(200,{ok:true,is_test:true,amount_sen:900,purchase_id:p.id,status:typeof p.status==="string"&&/^[a-z_]{1,32}$/.test(p.status)?p.status:"unknown",verified_test_paid:p.status==="paid",entitlement_changed:false});
+   if(p.status==="paid"&&(p.marked_as_paid!==false||p.payment?.is_outgoing!==false||p.payment?.currency!=="MYR"||p.payment?.amount!==amount))return reply(502,{ok:false,error:"paid_amount_mismatch",entitlement_changed:false});
+   return reply(200,{ok:true,is_test:true,amount_sen:amount,intent_id:intent,purchase_id:p.id,status:typeof p.status==="string"&&/^[a-z_]{1,32}$/.test(p.status)?p.status:"unknown",verified_test_paid:p.status==="paid",entitlement_changed:false});
  }catch{return reply(502,{ok:false,error:"provider_outcome_unknown",intent_id:intent,do_not_retry_create:create});}
 });
