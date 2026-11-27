@@ -30,6 +30,39 @@ CREATE TABLE myr_native.lhdn_submission_intents (
 );
 CREATE INDEX lhdn_intent_pending_idx ON myr_native.lhdn_submission_intents(environment,state,updated_at);
 REVOKE ALL ON myr_native.lhdn_submission_intents FROM PUBLIC;
+-- Protect the exact stored invoice across every existing JSON mutation path.
+-- This review trigger intentionally blocks even payments/approval edits for
+-- sandbox intents until a separate, reviewed lifecycle integration exists.
+CREATE FUNCTION myr_native.guard_lhdn_intent_invoice() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $
+DECLARE
+  intent record;
+  before_invoice jsonb;
+  after_invoice jsonb;
+BEGIN
+  FOR intent IN SELECT invoice_id FROM myr_native.lhdn_submission_intents
+      WHERE company_id=OLD.id AND state <> 'abandoned'
+  LOOP
+    SELECT jsonb_agg(x.value ORDER BY x.ord) INTO before_invoice
+      FROM jsonb_array_elements(OLD.data->'invoices') WITH ORDINALITY AS x(value,ord)
+      WHERE x.value->>'id'=intent.invoice_id;
+    SELECT jsonb_agg(x.value ORDER BY x.ord) INTO after_invoice
+      FROM jsonb_array_elements(NEW.data->'invoices') WITH ORDINALITY AS x(value,ord)
+      WHERE x.value->>'id'=intent.invoice_id;
+    IF before_invoice IS NULL OR after_invoice IS NULL
+       OR jsonb_array_length(before_invoice)<>1 OR jsonb_array_length(after_invoice)<>1
+       OR before_invoice IS DISTINCT FROM after_invoice THEN
+      RAISE EXCEPTION 'LHDN intent protects this invoice' USING ERRCODE='check_violation';
+    END IF;
+  END LOOP;
+  RETURN NEW;
+END;
+$;
+REVOKE ALL ON FUNCTION myr_native.guard_lhdn_intent_invoice() FROM PUBLIC;
+CREATE TRIGGER guard_lhdn_intent_invoice
+BEFORE UPDATE OF data ON myr_native.companies
+FOR EACH ROW EXECUTE FUNCTION myr_native.guard_lhdn_intent_invoice();
+
 -- Existing app role ownership/grants and encrypted backup coverage require
 -- operator review before applying this candidate to a real database.
 -- No code may assume the table exists yet.
