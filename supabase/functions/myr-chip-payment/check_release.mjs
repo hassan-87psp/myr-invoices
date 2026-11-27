@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import {makePurchase,checkPurchase,catalog} from "./checkout_candidate.mjs";
 import {buildTestTransport} from "./transport_candidate.mjs";
-import {generateKeyPairSync,sign} from "node:crypto";
+import {generateKeyPairSync,sign,webcrypto} from "node:crypto";
+// Node 18 does not expose Web Crypto globally in all invocation modes.
+if (!globalThis.crypto) Object.defineProperty(globalThis,"crypto",{value:webcrypto,configurable:true});
 const id="a1111111-1111-4111-8111-111111111111",brand="b2222222-2222-4222-8222-222222222222",pid="c3333333-3333-4333-8333-333333333333";
 const intent={id,plan:"Starter",amount_sen:900,mode:"test",state:"dispatching",provider_id:null};
 const created={id:pid,brand_id:brand,reference:"myr-test-"+id,is_test:true,purchase:{currency:"MYR",total:900},status:"created",checkout_url:"https://gate.chip-in.asia/p/"+pid+"/"};
