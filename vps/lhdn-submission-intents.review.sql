@@ -34,7 +34,7 @@ REVOKE ALL ON myr_native.lhdn_submission_intents FROM PUBLIC;
 -- This review trigger intentionally blocks even payments/approval edits for
 -- sandbox intents until a separate, reviewed lifecycle integration exists.
 CREATE FUNCTION myr_native.guard_lhdn_intent_invoice() RETURNS trigger
-LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $guard$
 DECLARE
   intent record;
   before_invoice jsonb;
@@ -57,7 +57,7 @@ BEGIN
   END LOOP;
   RETURN NEW;
 END;
-$;
+$guard$;
 REVOKE ALL ON FUNCTION myr_native.guard_lhdn_intent_invoice() FROM PUBLIC;
 CREATE TRIGGER guard_lhdn_intent_invoice
 BEFORE UPDATE OF data ON myr_native.companies
