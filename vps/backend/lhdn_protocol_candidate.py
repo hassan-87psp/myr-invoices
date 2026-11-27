@@ -83,7 +83,9 @@ def parse_accepted(http_status,data,code_number):
     require(isinstance(accepted,list) and len(accepted)==1 and rejected==[],"Submission not uniquely accepted")
     item=accepted[0]
     require(isinstance(item,dict) and item.get("invoiceCodeNumber")==code_number,"Accepted code mismatch")
-    return Receipt(identifier(data.get("submissionUid")),identifier(item.get("uuid")),text_value(code_number,100))
+    uid=data.get("submissionUid",data.get("submissionUID"))
+    require("submissionUid" not in data or "submissionUID" not in data or data["submissionUid"]==data["submissionUID"],"Conflicting submission identifiers")
+    return Receipt(identifier(uid),identifier(item.get("uuid")),text_value(code_number,100))
 
 def submission_path(receipt):
     return "/api/v1.0/documentsubmissions/"+identifier(receipt.submission_uid)+"?pageNo=1&pageSize=10"
@@ -149,7 +151,7 @@ def next_action(operation,http_status=None,transport_failed=False):
     require(operation in ("validate","poll","submit","cancel"),"Unknown operation")
     require(type(transport_failed) is bool,"Invalid transport state")
     if operation in ("submit","cancel"):
-        if transport_failed or http_status is None or http_status>=500 or http_status==429:
+        if transport_failed or http_status is None or http_status>=500 or http_status==429 or (operation=="submit" and http_status==422):
             return "reconcile_before_retry"
         if (operation=="submit" and http_status==202) or (operation=="cancel" and http_status==200):
             return "parse_provider_response"
@@ -195,6 +197,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(retry_after("90"),90)
         self.assertEqual(retry_after(None),60)
         self.assertEqual(next_action("submit",503),"reconcile_before_retry")
+        self.assertEqual(next_action("submit",422),"reconcile_before_retry")
         self.assertEqual(next_action("submit",transport_failed=True),"reconcile_before_retry")
         self.assertEqual(next_action("poll",429),"retry_with_backoff")
         self.assertEqual(next_action("validate",401),"renew_token_once")
