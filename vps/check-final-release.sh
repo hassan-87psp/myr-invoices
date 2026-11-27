@@ -10,6 +10,7 @@ run "CHIP protocol and callback mocks" node supabase/functions/myr-chip-payment/
 run "CHIP disposable ledger" bash vps/check-chip-disposable-db.sh
 run "Billing view" "$PY" -B vps/backend/chip_billing_view_candidate.py
 run "Billing UI integration build" "$PY" -B vps/backend/build_chip_billing_candidate.py
+run "Pinned native billing release assembly" "$PY" -B vps/backend/check_pinned_billing_release.py
 run "Subscription renewal policy" "$PY" -B vps/backend/chip_subscription_policy_candidate.py
 run "Manual billing disposable ledger" bash vps/check-billing-disposable-db.sh
 run "Production read-only preflight" "$PY" -B vps/backend/check_launch_preflight.py
