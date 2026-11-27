@@ -51,11 +51,11 @@ def pattern(value,regex,message):
     return value
 
 def party(value,supplier):
-    fields(value,"name tin brn sst email phone address msic msic_description" if supplier else "name tin brn sst email phone address")
+    fields(value,"name tin brn sst email phone address msic msic_description ttx" if supplier else "name tin brn sst email phone address")
     addr=value["address"]
     fields(addr,"line city postcode state country")
     require(addr["country"]=="MYS","Domestic MYR pilot only")
-    tin=pattern(value["tin"],r"[A-Z]{1,3}[0-9]{1,13}","TIN required")
+    tin=pattern(value["tin"],r"(?=.{1,14}$)[A-Z]{1,3}[0-9]{1,13}","TIN required")
     brn=pattern(value["brn"],r"[A-Z0-9-]{1,20}","Business registration number required")
     sst=pattern(value["sst"],r"(?:NA|[A-Z0-9-]{1,35}(?:;[A-Z0-9-]{1,35})?)","Explicit SST registration or NA required")
     phone=pattern(value["phone"],r"\+?[0-9]{7,20}","Contact number required")
@@ -74,6 +74,7 @@ def party(value,supplier):
     if value["email"]:
         p["Contact"][0]["ElectronicMail"]=leaf(pattern(value["email"],r"[^@\s]{1,100}@[^@\s]{1,100}\.[^@\s]{1,50}","Invalid email"))
     if supplier:
+        p["PartyIdentification"].append({"ID":leaf(pattern(value["ttx"],r"NA|[A-Z0-9-]{1,17}","Explicit tourism tax registration or NA required"),schemeID="TTX")})
         p["IndustryClassificationCode"]=leaf(pattern(value["msic"],r"[0-9]{5}","MSIC required"),name=text_value(value["msic_description"],300))
     return [{"Party":[p]}]
 
@@ -121,6 +122,7 @@ def generate(snapshot,now):
     supplier=party(snapshot["supplier"],True)
     buyer=party(snapshot["buyer"],False)
     require(snapshot["supplier"]["tin"]!=snapshot["buyer"]["tin"],"Same-party invoices not supported")
+    require(not snapshot["supplier"]["tin"].startswith("EI") and not snapshot["buyer"]["tin"].startswith("EI"),"Special TIN requires separate workflow")
     lines=[]; groups=defaultdict(lambda:[ZERO,ZERO]); net_total=ZERO; tax_total=ZERO
     for i,x in enumerate(snapshot["lines"],1):
         mandatory_line=set("description classification quantity unit_price tax_type tax_rate".split())
@@ -180,7 +182,7 @@ class GeneratorTests(unittest.TestCase):
         p={"name":"Synthetic Sdn Bhd","tin":"C1234567890","brn":"202001234567","sst":"NA","phone":"+60312345678","email":"",
            "address":{"line":"Test street","city":"Petaling Jaya","postcode":"47810","state":"10","country":"MYS"}}
         self.s={"number":"TEST-1","issue_at":self.now.isoformat(),"currency":"MYR","document_type":"01",
-          "supplier":{**p,"sst":"A01-1234-56789012","msic":"46900","msic_description":"Wholesale"},
+          "supplier":{**p,"sst":"A01-1234-56789012","ttx":"NA","msic":"46900","msic_description":"Wholesale"},
           "buyer":{**p,"tin":"C9876543210","brn":"202001234568"},
           "lines":[{"description":"Fixture","classification":"022","quantity":"3","unit_price":"10.01","tax_type":"02","tax_rate":"8"}],
           "expected_total":"32.43"}
