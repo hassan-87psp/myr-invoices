@@ -6,6 +6,8 @@ PY="$HOME/myr-venv/bin/python"
 test -x "$PY"
 unset MYR_PRODUCTION_RELEASE
 bash vps/check-lhdn-offline-suite.sh
+echo "=== Sandbox HTTP transport mock tests ==="
+"$HOME/.deno/bin/deno" test supabase/functions/myr-lhdn-intermediary/sandbox_transport_candidate_test.ts
 for f in lhdn_worker_rehearsal.py lhdn_rejection_candidate.py lhdn_xades_rehearsal.py lhdn_readiness_route_candidate.py; do
     echo "=== $f ==="
     "$PY" -B "vps/backend/$f"
