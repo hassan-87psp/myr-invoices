@@ -95,15 +95,15 @@ export function createHandler(env: (name:string)=>string|undefined, send: typeof
       // Bounded body; never log taxpayer identity, provider response or tokens.
       const reader=req.body?.getReader();
       if (!reader) return json(400,{ok:false,code:"invalid_request"});
-      const chunks:Uint8Array[]=[]; let size=0;
+      const bytes=new Uint8Array(2048); let size=0;
       for (;;) {
         const part=await reader.read(); if(part.done) break;
+        if(part.value.byteLength>bytes.length-size){await reader.cancel();return json(413,{ok:false,code:"request_too_large"});}
+        bytes.set(part.value,size);
         size+=part.value.byteLength;
-        if(size>2048){await reader.cancel();return json(413,{ok:false,code:"request_too_large"});}
-        chunks.push(part.value);
       }
       let body;
-      try { body=JSON.parse(await new Blob(chunks).text()); } catch { return json(400,{ok:false,code:"invalid_request"}); }
+      try { body=JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(bytes.subarray(0,size))); } catch { return json(400,{ok:false,code:"invalid_request"}); }
       if (!body || typeof body!=="object" || Array.isArray(body)) return json(400,{ok:false,code:"invalid_request"});
       if (!["sandbox","production"].includes(body.environment)) return json(400,{ok:false,code:"invalid_environment"});
       const environment=body.environment as Env;
