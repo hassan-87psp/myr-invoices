@@ -79,4 +79,35 @@ def check_connection(cid,tin,brn,environment="production"):
     safe={"connection_check_disabled","authorization_or_credentials_rejected","rate_limited","bridge_unavailable","provider_unavailable","invalid_provider_response"}
     reason=d.get("code")
     return {"status":reason if isinstance(reason,str) and reason in safe else "connection_unavailable","submission_enabled":False}
+def sandbox_configuration_status():
+    """Private, read-only readiness probe. No taxpayer information is sent."""
+    code,d=bridge({"action":"configuration_status","environment":"sandbox"})
+    ok=code==200 and d.get("ok") is True
+    return {"environment":"sandbox","bridge_reachable":ok,
+        "credentials_configured":d.get("configured") is True if ok else None,
+        "connection_check_enabled":d.get("connection_check_enabled") is True if ok else False,
+        "submission_enabled":False}
+
+def validate_sandbox_identity(cid,tin,brn):
+    """Private operator helper, not exposed as an HTTP route.
+    Caller must obtain current owner authorization and identity from server DB.
+    Only the matching operator-approved sandbox pilot can be tested.
+    """
+    target=approved_target(cid,tin,brn,"sandbox")
+    if not target:
+        return {"status":"review_required","submission_enabled":False}
+    if not claim_slot():
+        return {"status":"retry_later","submission_enabled":False}
+    code,d=bridge({"action":"validate_self_tin","environment":"sandbox","tenant_id":str(cid),
+        "taxpayer":target,"brn":brn},timeout=40)
+    if code==200 and d.get("ok") is True and d.get("verification") in ("provider_tin","cached_tin"):
+        return {"status":"tin_verified" if d["verification"]=="provider_tin" else "cached_tin",
+                "submission_enabled":False}
+    allowed={"tin_validation_disabled","connection_check_disabled","authorization_or_credentials_rejected",
+        "rate_limited","bridge_unavailable","provider_unavailable","invalid_provider_response",
+        "invalid_input","permission_denied","identity_not_matched","authentication_required"}
+    reason=d.get("code")
+    return {"status":reason if isinstance(reason,str) and reason in allowed else "connection_unavailable",
+            "submission_enabled":False}
+
 if __name__=="__main__":print(json.dumps(configuration_status(),indent=2))
