@@ -7,9 +7,13 @@ Staged only. Live release remains connection-only. Do not enable production subm
 - lhdn_ubl_candidate.py: offline UBL JSON generator for domestic business invoices (01), credit/debit/refund notes (02/03/04) with trusted valid original reference, selected currencies, line discounts/fees and rounding; v1.0, explicit sales/service/no-tax treatment, exact decimal arithmetic and independent total check. No signing or actual provider validation yet.
 - lhdn_saved_invoice_candidate.py: offline mapping of persisted ordinary invoice/customer/company snapshots, integer sen reconciliation with existing UI, explicit foreign exchange rate, approval and no-prior-attempt checks. No DB endpoint or actual authorization lookup; adjustment mapping remains disabled.
 - lhdn_protocol_candidate.py: byte-level hash, single-document envelope, acceptance and status parsing, verification link, cancellation and retry decisions.
-- ../lhdn-submission-intents.review.sql: proposed durable tenant-scoped intent storage; not applied, no worker consumes it.
+- lhdn_lifecycle_candidate.py: sandbox-only transaction helpers for preparing/reserving an immutable snapshot, uncertain outcomes, acceptance, guarded status synchronization, cancellation planning and polling intervals. No HTTP transport or deployed worker. The caller must enforce transaction commit, trusted response provenance and authorization; imported accounts with disabled native credentials are intentionally excluded until identity review.
+- lhdn_signing_candidate.py: offline X.509 Malaysian organization profile checks, SHA-256 digest material and RSA primitive verified against its own synthetic public key. Not complete XAdES signing; no CA chain/revocation validation or actual credentials.
+- ../lhdn-submission-intents.review.sql: proposed durable tenant-scoped intent storage and database trigger protecting invoice changes/deletion through JSON updates. Not applied; no worker consumes it.
 
 ## Required before any submission
+
+The current review code is not an approved release. Database integration tests must use a separate disposable database, including concurrent prepare/edit, duplicate reservation, revocation, rollback, crash recovery and cross-company checks. Do not connect a browser route to any transaction or send request yet. Sandbox-only intent results must not appear as production UUIDs or QR codes.
 
 1. Map the persisted company, buyer and invoice snapshot to the normalized generator contract on the server, using an authenticated owner, company revision and approved invoice. Never accept client-supplied UBL, issuer identity, provider UUID or totals as authoritative. Reconcile against existing UI discount, fee, rounding and payment calculations. Unsupported cases stay blocked.
 2. Verify code lists, complete document schema and provider examples against the current MyInvois SDK. Test dates, tax groups and mandatory field combinations in sandbox. Generator now supports line-level discounts/fees and explicit rounding plus selected FX and adjustment references. Persisted mapper only covers ordinary invoices and existing line discounts, not fees/rounding fields or adjustment records. Prepayments, exemptions, self-billing, invoice-level adjustments and special TIN workflows remain excluded. Verify original reference ownership and adjustment eligibility in a server-side transaction before enabling notes.
@@ -24,12 +28,17 @@ Staged only. Live release remains connection-only. Do not enable production subm
     python -B vps/backend/lhdn_protocol_candidate.py
     python -B vps/backend/lhdn_ubl_candidate.py
     python -B vps/backend/lhdn_saved_invoice_candidate.py
+    python -B vps/backend/lhdn_lifecycle_candidate.py
+    python -B vps/backend/lhdn_signing_candidate.py  # requires compatible cryptography (>=42); verify dependency before installation
     deno test supabase/functions/myr-lhdn-intermediary/index_test.ts
 
 SDK references:
 - https://sdk.myinvois.hasil.gov.my/documents/invoice-v1-0/
 - https://sdk.myinvois.hasil.gov.my/documents/invoice-v1-1/
 - https://sdk.myinvois.hasil.gov.my/signature-creation-json/
+- https://sdk.myinvois.hasil.gov.my/signature/
+- https://sdk.myinvois.hasil.gov.my/einvoicingapi/06-get-submission/
+- https://sdk.myinvois.hasil.gov.my/integration-practices/
 - https://sdk.myinvois.hasil.gov.my/faq/
 - https://sdk.myinvois.hasil.gov.my/mathematical-mappings/
 - https://sdk.myinvois.hasil.gov.my/documents/credit-v1-0/
