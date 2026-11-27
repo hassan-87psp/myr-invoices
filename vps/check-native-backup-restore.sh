@@ -58,6 +58,11 @@ test "$IDENTITY" = "myr_restore_rehearsal|myr_restore_test|true"
 TABLES="$("$BIN/psql" -XAt -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM pg_tables WHERE schemaname='myr_native'")"
 test "$TABLES" -ge 11
 "$BIN/psql" -XAt -v ON_ERROR_STOP=1 -c "BEGIN READ ONLY; SELECT count(*) FROM myr_native.users; SELECT count(*) FROM myr_native.companies; SELECT count(*) FROM myr_native.lhdn_documents; ROLLBACK;" >"$ROOT/counts.log"
+if [ "${1:-}" = "--billing-rehearsal" ]; then
+    cd "$(dirname "$0")/.."
+    "$PY" -B vps/backend/check_billing_restored_schema.py "$ROOT" >"$ROOT/billing.log" 2>&1 || { echo "Billing restored schema rehearsal failed; no production changes."; exit 1; }
+    grep -Fx "MYR_BILLING_RESTORED_SCHEMA_AND_RESTRICTED_ROLE_OK" "$ROOT/billing.log"
+fi
 echo "Native tables restored: $TABLES"
 echo "MYR_ENCRYPTED_BACKUP_RESTORE_OK"
 echo "Local restore verified. Offsite recovery and original production ownership/ACL restoration remain unverified."
