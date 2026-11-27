@@ -39,6 +39,7 @@ Deno.serve(async(req:Request)=>{
     if(p.status!=="created"||p.checkout_url!==expected)return reply(502,{ok:false,error:"unexpected_checkout",intent_id:intent,do_not_retry_create:true});
     return reply(200,{ok:true,is_test:true,amount_sen:900,intent_id:intent,purchase_id:p.id,checkout_url:expected,status:"created",entitlement_changed:false});
    }
+   if(p.status==="paid"&&p.payment?.amount!==900)return reply(502,{ok:false,error:"paid_amount_mismatch",entitlement_changed:false});
    return reply(200,{ok:true,is_test:true,amount_sen:900,purchase_id:p.id,status:typeof p.status==="string"&&/^[a-z_]{1,32}$/.test(p.status)?p.status:"unknown",verified_test_paid:p.status==="paid",entitlement_changed:false});
  }catch{return reply(502,{ok:false,error:"provider_outcome_unknown",intent_id:intent,do_not_retry_create:create});}
 });
