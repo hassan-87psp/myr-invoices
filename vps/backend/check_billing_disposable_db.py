@@ -18,8 +18,8 @@ def main():
     with connect() as c:
         c.execute("""CREATE SCHEMA myr_native;
           CREATE TABLE myr_native.users(id uuid PRIMARY KEY,email text UNIQUE NOT NULL,
-            disabled boolean NOT NULL DEFAULT false,email_verified_at timestamptz,is_platform_admin boolean DEFAULT false);
-          CREATE TABLE myr_native.companies(id uuid PRIMARY KEY,plan text NOT NULL,status text NOT NULL);
+            name text, disabled boolean NOT NULL DEFAULT false,email_verified_at timestamptz,is_platform_admin boolean DEFAULT false);
+          CREATE TABLE myr_native.companies(id uuid PRIMARY KEY,plan text NOT NULL,status text NOT NULL,data jsonb NOT NULL DEFAULT '{}'::jsonb);
           CREATE TABLE myr_native.company_members(company_id uuid REFERENCES myr_native.companies(id),
             email text REFERENCES myr_native.users(email),role text,status text,PRIMARY KEY(company_id,email));""")
         c.execute((Path(__file__).resolve().parent.parent/"billing-ledger.review.sql").read_text())
@@ -27,7 +27,7 @@ def main():
         for uid,flag in ((admin,True),(owner,False),(other,False)):
             c.execute("INSERT INTO myr_native.users(id,email,email_verified_at,is_platform_admin) VALUES(%s,%s,now(),%s)",(uid,uid.hex+"@example.invalid",flag))
         for cid,uid,plan in ((company,owner,"Starter"),(second,other,"Pro")):
-            c.execute("INSERT INTO myr_native.companies VALUES(%s,%s,'active')",(cid,plan))
+            c.execute("INSERT INTO myr_native.companies(id,plan,status) VALUES(%s,%s,'active')",(cid,plan))
             c.execute("INSERT INTO myr_native.company_members VALUES(%s,%s,'Owner','active')",(cid,uid.hex+"@example.invalid"))
         c.commit()
         month=date(2026,11,1)
@@ -50,6 +50,8 @@ def main():
         c.execute("UPDATE myr_native.users SET disabled=true WHERE id=%s",(admin,))
         reject(c,lambda:record_receipt(c,admin,second,pid2,1900,"duitnow","TEST-3"))
         c.rollback()
+    from check_billing_api_candidate import exercise
+    exercise(admin,owner,other,company,second)
     print("MYR_BILLING_LEDGER_DISPOSABLE_TEST_OK")
 if __name__=="__main__":
     main()
