@@ -9,7 +9,7 @@ from collections import defaultdict
 import json
 import re
 import unittest
-from lhdn_protocol_candidate import require, text_value, make_submission
+from lhdn_protocol_candidate import require, text_value, make_submission, identifier
 
 CENT=Decimal("0.01")
 ZERO=Decimal(0)
@@ -88,10 +88,21 @@ def subtotal(code,net,tax,rate=None,currency="MYR"):
 def generate(snapshot,now):
     require(isinstance(snapshot,dict),"Normalized snapshot required")
     mandatory=set("number issue_at currency document_type supplier buyer lines expected_total".split())
-    require(mandatory<=set(snapshot)<=mandatory|{"fx_rate","rounding"},"Unsupported or missing normalized fields")
+    require(mandatory<=set(snapshot)<=mandatory|{"fx_rate","rounding","original"},"Unsupported or missing normalized fields")
     currency=snapshot["currency"]
     require(currency in ("MYR","USD","SGD","EUR","GBP","AUD","CNY","HKD","JPY"),"Unsupported currency")
-    require(snapshot["document_type"]=="01","Only ordinary invoices supported")
+    dtype=snapshot["document_type"]
+    require(dtype in ("01","02","03","04"),"Self-billed and unsupported documents are blocked")
+    reference=snapshot.get("original")
+    if dtype=="01":
+        require(reference is None,"Ordinary invoice cannot contain adjustment reference")
+    else:
+        # This object must come from a trusted, tenant-bound official document lookup.
+        fields(reference,"status document_type number uuid supplier_tin buyer_tin currency")
+        require(reference["status"]=="Valid" and reference["document_type"]=="01","Valid original ordinary invoice required")
+        require(reference["supplier_tin"]==snapshot["supplier"]["tin"] and reference["buyer_tin"]==snapshot["buyer"]["tin"] and reference["currency"]==currency,"Reference identity or currency mismatch")
+        require(text_value(reference["number"],50)!=snapshot["number"],"Adjustment requires different document number")
+        identifier(reference["uuid"])
     fx=dec(snapshot.get("fx_rate","0"),8)
     require((currency=="MYR" and fx==0) or (currency!="MYR" and fx>0),"Explicit foreign currency exchange rate required")
     rounding_raw=snapshot.get("rounding","0")
@@ -146,13 +157,15 @@ def generate(snapshot,now):
     require(payable>0 and payable==dec(snapshot["expected_total"]),"Confirmed invoice total differs from computed total")
     invoice={
         "ID":leaf(number),"IssueDate":leaf(issued.date().isoformat()),"IssueTime":leaf(issued.strftime("%H:%M:%SZ")),
-        "InvoiceTypeCode":leaf("01",listVersionID="1.0"),"DocumentCurrencyCode":leaf(currency),
+        "InvoiceTypeCode":leaf(dtype,listVersionID="1.0"),"DocumentCurrencyCode":leaf(currency),
         "AccountingSupplierParty":supplier,"AccountingCustomerParty":buyer,
         "TaxTotal":[{"TaxAmount":amount(tax_total),"TaxSubtotal":[subtotal(code,*groups[code],currency=currency) for code in sorted(groups)]}],
         "LegalMonetaryTotal":[{"LineExtensionAmount":amount(net_total),"TaxExclusiveAmount":amount(net_total),
             "TaxInclusiveAmount":amount(total),"PayableAmount":amount(payable)}],
         "InvoiceLine":lines
     }
+    if reference:
+        invoice["BillingReference"]=[{"InvoiceDocumentReference":[{"ID":leaf(reference["number"]),"UUID":leaf(reference["uuid"])}]}]
     if rounding: invoice["LegalMonetaryTotal"][0]["PayableRoundingAmount"]=amount(rounding)
     if currency!="MYR":
         invoice["TaxExchangeRate"]=[{"SourceCurrencyCode":leaf(currency),"TargetCurrencyCode":leaf("MYR"),"CalculationRate":leaf(fx)}]
@@ -207,6 +220,15 @@ class GeneratorTests(unittest.TestCase):
         d=json.loads(generate(self.s,self.now),parse_float=Decimal)["Invoice"][0]
         self.assertEqual(d["TaxExchangeRate"][0]["CalculationRate"][0]["_"],Decimal("4.123456"))
         self.assertEqual(d["LegalMonetaryTotal"][0]["PayableAmount"][0]["currencyID"],"USD")
+    def test_adjustment_reference(self):
+        original={"status":"Valid","document_type":"01","number":"ORIGINAL-1","uuid":"ORIGINALUUID123","supplier_tin":self.s["supplier"]["tin"],"buyer_tin":self.s["buyer"]["tin"],"currency":"MYR"}
+        for dtype in ("02","03","04"):
+            snapshot={**self.s,"document_type":dtype,"original":original}
+            d=json.loads(generate(snapshot,self.now))["Invoice"][0]
+            self.assertEqual(d["InvoiceTypeCode"][0]["_"],dtype)
+            self.assertEqual(d["BillingReference"][0]["InvoiceDocumentReference"][0]["UUID"][0]["_"],"ORIGINALUUID123")
+            with self.assertRaises(ValueError):generate({**snapshot,"original":{**original,"status":"Cancelled"}},self.now)
+            with self.assertRaises(ValueError):generate({**snapshot,"original":{**original,"buyer_tin":"C0000000000"}},self.now)
     def test_sst_required(self):
         self.s["supplier"]["sst"]="NA"
         with self.assertRaises(ValueError):generate(self.s,self.now)
