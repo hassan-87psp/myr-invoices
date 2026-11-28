@@ -1,4 +1,4 @@
-import { createHandler } from "./handler.ts";
+import { createHandler, retryDeadline } from "./handler.ts";
 const secret="a".repeat(64);
 const values:Record<string,string>={MYR_LHDN_BRIDGE_SECRET:secret,MYR_LHDN_SANDBOX_CLIENT_ID:"mock",MYR_LHDN_SANDBOX_CLIENT_SECRET:"mock-secret"};
 let calls=0;
@@ -55,4 +55,26 @@ Deno.test("TIN pilot remains sandbox-only, verifies BRN and never leaks token",a
   assert((await h(req({...payload,tenant_id:"00000000-0000-4000-8000-000000000002"}))).status===200);
   assert(authCalls===2 && validationCalls===2);
   assert((await h(req({...payload,action:"submit"}))).status===400);
+});
+
+Deno.test("provider retry deadline preserves long and date-based waits",()=>{
+ const now=Date.parse("2026-11-28T03:00:00Z");
+ assert(retryDeadline("7200",now)===now+7200000);
+ assert(retryDeadline("Sat, 28 Nov 2026 05:00:00 GMT",now)===now+7200000);
+ assert(retryDeadline(null,now)===now+60000);
+ assert(retryDeadline("0",now)===now+60000);
+ assert(retryDeadline("bad",now)===now+60000);
+});
+Deno.test("denied taxpayer validation invalidates cached access",async()=>{
+ const settings={...values,MYR_LHDN_SANDBOX_CONNECTION_CHECK_ENABLED:"true",MYR_LHDN_SANDBOX_TIN_VALIDATION_ENABLED:"true"} as Record<string,string>;
+ let logins=0;
+ const mock=(async (url:string)=>{
+   if(url.endsWith("/connect/token")){logins++;return new Response(JSON.stringify({access_token:"token-"+logins,token_type:"Bearer",expires_in:3600}));}
+   return new Response(null,{status:403});
+ }) as typeof fetch;
+ const h=createHandler(k=>settings[k],mock);
+ const p={...body,action:"validate_self_tin",brn:"123456789012"};
+ assert((await h(req(p))).status===403);
+ assert((await h(req(body))).status===200);
+ assert(logins===2);
 });
