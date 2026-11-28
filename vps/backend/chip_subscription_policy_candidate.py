@@ -46,7 +46,7 @@ def subscription_status(sub,today):
     status="scheduled" if today<start else "expired" if remaining<=0 else "active"
     if sub.get("open_payment") is True:
         reminder="reconcile_payment"
-    elif sub.get("cancel_at_period_end") is True or today<start:
+    elif sub.get("open_payment") is not False or sub.get("cancel_at_period_end") is not False or today<start:
         reminder=None
     elif remaining in (7,3,1):
         reminder="renewal_reminder"
@@ -61,8 +61,9 @@ def plan_change(sub,target,seats,today):
         raise ValueError("Invalid plan request")
     if seats>{"Starter":1,"Pro":3,"Business":10}[target]:
         return {"action":"seat_limit_exceeded"}
-    if sub and sub.get("open_payment") is True:
-        return {"action":"reconcile_existing"}
+    if sub is not None:
+        if sub.get("open_payment") is True:return {"action":"reconcile_existing"}
+        if sub.get("open_payment") is not False:return {"action":"manual_review_payment_state"}
     status=subscription_status(sub,today)
     if status["status"]=="scheduled":return {"action":"review_scheduled_period"}
     if status["status"]=="active":
@@ -83,7 +84,7 @@ def paid_period(intent,verified,*,live_enabled=False):
         or intent.get("amount_sen")!=amount or verified.get("amount_sen")!=amount or verified.get("currency")!="MYR"):
         raise ValueError("Plan or amount mismatch")
     start=intent["period_start"]; end=intent["period_end"]
-    if end!=renewal_date(start,intent["anchor_day"]):raise ValueError("Period mismatch")
+    if type(end) is not date or end!=renewal_date(start,intent["anchor_day"]):raise ValueError("Period mismatch")
     if intent.get("seats_fit") is not True:raise ValueError("Seat limit exceeded")
     # Future caller must perform unique receipt and entitlement update in one DB transaction.
     return {"plan":intent["plan"],"period_start":start,"period_end":end,"provider_id":intent["provider_id"]}
@@ -140,4 +141,7 @@ if __name__=="__main__":
     assert plan_change(period,"Pro",2,a)["action"]=="no_change"
     assert plan_change(period,"Pro",2,b)["action"]=="new_checkout_required"
     assert plan_change({**period,"open_payment":True},"Pro",2,b)["action"]=="reconcile_existing"
+    assert plan_change({**period,"open_payment":None},"Pro",2,b)["action"]=="manual_review_payment_state"
+    assert subscription_status({**period,"open_payment":None},b)["reminder"] is None
+    assert subscription_status({**period,"cancel_at_period_end":None},b)["reminder"] is None
     print("MYR_SUBSCRIPTION_POLICY_OFFLINE_OK")
