@@ -3,6 +3,14 @@
 set -euo pipefail
 umask 077
 test "$(id -un)" = myradmin
+# This legacy publisher predates native auth and the installed manifest worker.
+# Refuse before any deployment or service changes, including --run.
+for marker in "$HOME/.config/myrinvoice/native-auth-pilot-enabled" "$HOME/.config/myrinvoice/frontend-autodeploy/worker.py"; do
+    if [ -e "$marker" ] || [ -L "$marker" ]; then
+        echo "MYR_LEGACY_BACKEND_DEPLOY_BLOCKED: native production publisher requires a separate reviewed release mechanism." >&2
+        exit 78
+    fi
+done
 REPO="$HOME/myr-invoices"
 BASE=/var/www/myrinvoice.com/auto
 MARKER="$HOME/.config/myrinvoice/production-writes-enabled"
