@@ -67,7 +67,9 @@ def set_company(conn,profile,cid,version,status=None,plan=None):
     require(profile.get("is_platform_admin") is True,"Platform administrator required")
     require(type(version) is int and version>0,"Invalid version")
     require(status in (None,"active","suspended") and plan in (None,*PLANS) and (status is not None or plan is not None),"Invalid change")
-    actor=conn.execute("SELECT email,is_platform_admin FROM myr_native.users WHERE id=%s AND email_verified_at IS NOT NULL FOR SHARE",(profile["id"],)).fetchone()
+    # Imported passwordless users use separately verified legacy credentials;
+    # a disabled native-password admin must never authorize a mutation.
+    actor=conn.execute("SELECT email,is_platform_admin FROM myr_native.users WHERE id=%s AND email_verified_at IS NOT NULL AND (NOT disabled OR password_hash IS NULL) FOR SHARE",(profile["id"],)).fetchone()
     require(actor is not None and actor[1] and actor[0]==profile["email"],"Administrator no longer authorized")
     row=conn.execute("""SELECT version,data,status,plan FROM myr_native.companies WHERE id=%s
         AND data->>'vpsSyntheticWriteTest' IS DISTINCT FROM 'true' FOR UPDATE""",(cid,)).fetchone()
