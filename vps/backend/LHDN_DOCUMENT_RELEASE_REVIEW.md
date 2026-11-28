@@ -70,3 +70,12 @@ SDK references:
 - https://sdk.myinvois.hasil.gov.my/documents/credit-v1-0/
 - https://sdk.myinvois.hasil.gov.my/documents/debit-v1-0/
 - https://sdk.myinvois.hasil.gov.my/documents/refund-v1-0/
+
+
+## Status polling candidate — 28 November 2026
+
+- `lhdn_sandbox_poll_candidate.py` now stages an operator-only polling adapter: an exact, expiring grant binds tenant, issuer, immutable document hash, invoice code, submission UID and UUID. A committed database reservation and active owner check precede the read; response persistence rechecks the grant and reservation. Only the isolated Sandbox intent table receives verified status changes. An accepted submission is not considered Valid until a matching provider status and verification identifier arrive.
+- `lhdn-sandbox-poll.review.sql` adds a durable poll claim, retry deadline and manual-review flag, and refuses other database names. No SQL applied. Actual least-privilege worker and concurrency tests remain necessary.
+- `sandbox_poll_bridge_candidate.ts` is a private, fixed preproduction-host, receipt-bound status bridge, with separate secret, disabled-by-default gate and exact expiring grant. No submission method is exposed. A deployment entrypoint is intentionally not provided. Mock tests are included in the existing edge gate.
+- The private pilot conservatively waits at least 60 seconds following unavailability, honors longer Retry-After, and blocks on excessive backoff instead of retrying early. Normal pending status uses a five-second minimum. Fresh login per short operator poll is only a pilot design; before scaling, rehearse distributed rate limits and revocation-aware token reuse.
+- No external MyInvois request, credentials, schema migration, worker deployment, live acceptance, cancellation or automatic recurring poll was performed. Real provider document identifiers and authorization remain to be verified. Source reference: https://sdk.myinvois.hasil.gov.my/einvoicingapi/06-get-submission/ and https://sdk.myinvois.hasil.gov.my/integration-practices/.
