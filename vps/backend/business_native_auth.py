@@ -39,7 +39,8 @@ def throttle(key,limit,period):
                 del BUCKETS[k]
         expiry,count=BUCKETS.get(key,(now+period,0))
         if count>=limit or (key not in BUCKETS and len(BUCKETS)>=10000):
-            raise HTTPException(429,"Too many requests; try again later")
+            remaining=max(1,int(expiry-now+0.999999)) if count>=limit else 60
+            raise HTTPException(429,"Too many requests; try again later",headers={"Retry-After":str(remaining)})
         BUCKETS[key]=(expiry,count+1)
 
 def guard(request,action,email=""):
@@ -52,6 +53,7 @@ def guard(request,action,email=""):
             host=str(ipaddress.ip_address(request.headers.get("x-real-ip","")))
         except ValueError:
             raise HTTPException(403,"Trusted proxy required") from None
+    throttle(("host-global",host),120,60)
     throttle(("host",action,host),30,60)
     if email:
         throttle(("email",action,email),5,900)
