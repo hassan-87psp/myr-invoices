@@ -47,6 +47,39 @@
           "new": "if(!MYR_FINISH_TOKEN||MYR_FINISH_ACTION!==action)return authErr('Open the secure link from your email again.');"
         }
       ]
+    },
+    {
+      "id": "billing-readonly-autoload-v1",
+      "replacements": [
+        {
+          "old": "function myrBillingHistoryPanel(){\n return",
+          "new": "function myrBillingHistoryPanel(){\n requestAnimationFrame(()=>{const button=document.getElementById('myr-billing-refresh');if(button&&!button.disabled)myrLoadBillingHistory(button)});\n return"
+        },
+        {
+          "old": "<button class=\"btn sm\" onclick=\"myrLoadBillingHistory(this)\">Refresh</button>",
+          "new": "<button id=\"myr-billing-refresh\" class=\"btn sm\" onclick=\"myrLoadBillingHistory(this)\">Refresh</button>"
+        },
+        {
+          "old": "Select Refresh to load verified billing records. Online payments and automatic renewal are not released yet.",
+          "new": "Loading billing records… Online payments and automatic renewal are not released yet."
+        },
+        {
+          "old": "No billing records yet.",
+          "new": "No recorded subscription payments yet. Your current plan is not proof of a paid subscription."
+        },
+        {
+          "old": "function myrChipAdminPanel(rows){\n const companies=",
+          "new": "function myrChipAdminPanel(rows){\n requestAnimationFrame(()=>{const button=document.getElementById('myr-chip-refresh');if(button&&!button.disabled)myrChipAdminHistory(button)});\n const companies="
+        },
+        {
+          "old": "<button class=\"btn\" onclick=\"myrChipAdminHistory(this)\">Refresh history</button>",
+          "new": "<button id=\"myr-chip-refresh\" class=\"btn\" onclick=\"myrChipAdminHistory(this)\">Refresh history</button>"
+        },
+        {
+          "old": "b.textContent='Verify test payment';b.onclick=async()=>{b.disabled=true;try{const result=await myrBillingRequest('admin/sandbox/verify',{intent_id:x.id});b.textContent=result.status==='verified_test_paid'?'Verified test only':'Not paid';}catch(e){b.textContent='Verification unavailable';}finally{b.disabled=false}};td.append(b);",
+          "new": "b.textContent='Verification not released';b.disabled=true;td.append(b);"
+        }
+      ]
     }
   ]
 }
