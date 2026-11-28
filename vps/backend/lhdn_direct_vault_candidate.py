@@ -113,7 +113,9 @@ class Vault:
         require(local<end<=local+dt.timedelta(days=1097),"Expiry must be in the future, within three years")
         with self._locked(scope) as (fd,name):
             old=self._read(fd,name,scope);self._revision(old,expected)
-            record={"revision":expected+1,"client_id":client_id,"client_secret":client_secret,"expiry":end.isoformat(),"state":"pending_identity_review","updated":now.isoformat()}
+            require(not (old and old.get("probe_claim")),"Previous verification needs review before replacement")
+            record={"revision":expected+1,"client_id":client_id,"client_secret":client_secret,"expiry":end.isoformat(),"state":"pending_identity_review","updated":now.isoformat(),
+                    "probe_after":old.get("probe_after",0) if old else 0,"probe_blocked":bool(old and old.get("probe_blocked"))}
             self._write(fd,name,scope,record)
             return self._status(record,now)
     def disconnect(self,scope,expected,now):
@@ -123,7 +125,8 @@ class Vault:
         with self._locked(scope) as (fd,name):
             old=self._read(fd,name,scope);self._revision(old,expected)
             require(old is not None,"No credential record")
-            record={"revision":expected+1,"state":"disconnected","updated":now.isoformat()}
+            record={"revision":expected+1,"state":"disconnected","updated":now.isoformat(),
+                    "probe_after":old.get("probe_after",0),"probe_blocked":bool(old.get("probe_claim") or old.get("probe_blocked"))}
             self._write(fd,name,scope,record)
             return self._status(record,now)
     def probe_staged(self,scope,expected,now,approve,probe):
@@ -165,7 +168,7 @@ class Vault:
             require(approve(scope) is True,"Pilot approval changed")
             # A successful login and public lookup do NOT establish issuer ownership.
             record={**current,"revision":expected+2,"probe_claim":False,"probe_blocked":limited,
-                    "probe_after":now.timestamp()+60,"last_login_status":login,
+                    "probe_after":now.timestamp()+120,"last_login_status":login,
                     "tin_brn_lookup_verified":matched,"updated":now.isoformat()}
             self._write(fd,name,scope,record)
             return self._status(record,now)
@@ -275,6 +278,9 @@ class VaultTests(unittest.TestCase):
         self.assertTrue(result["verification_review_required"])
         self.assertNotIn("synthetic private value",str(result))
         with self.assertRaises(ValueError):self.v.probe_staged(self.s,3,self.now+dt.timedelta(days=1),lambda s:True,fail)
+        self.v.disconnect(self.s,3,self.now)
+        self.store(4,"replacement")
+        with self.assertRaises(ValueError):self.v.probe_staged(self.s,5,self.now+dt.timedelta(days=1),lambda s:True,fail)
     def test_revocation_during_probe(self):
         self.store()
         active=[True]
