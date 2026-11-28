@@ -25,6 +25,8 @@ else
   exit 2
  fi
 fi
+[[ "$ROOT" =~ ^[A-Za-z0-9_./-]+$ ]] || { echo "Unsafe private path"; exit 2; }
+test "$(stat -c %u "$ROOT")" = "$(id -u)" && test "$(stat -c %a "$ROOT")" = 700
 started=0
 cleanup(){
  if [ "$started" -eq 1 ]; then
@@ -36,7 +38,13 @@ trap cleanup EXIT
 mkdir -m 700 "$ROOT/socket"
 "$BIN/initdb" -D "$ROOT/data" -U myr_lhdn_sandbox_admin --auth-local=trust --auth-host=reject --encoding=UTF8 --no-locale >"$ROOT/init.log"
 # Socket is under a 0700 parent. No TCP listener and no connection to native VPS DB.
-"$BIN/pg_ctl" -D "$ROOT/data" -l "$ROOT/postgres.log" -o "-c listen_addresses='' -c unix_socket_directories='$ROOT/socket' -c unix_socket_permissions=0700 -p 55441" -w start >/dev/null
+cat >> "$ROOT/data/postgresql.conf" <<EOF
+listen_addresses = ''
+unix_socket_directories = '$ROOT/socket'
+unix_socket_permissions = 0700
+port = 55441
+EOF
+"$BIN/pg_ctl" -D "$ROOT/data" -l "$ROOT/postgres.log" -w start >/dev/null
 started=1
 PSQL=("$BIN/psql" -X -v ON_ERROR_STOP=1 -h "$ROOT/socket" -p 55441 -U myr_lhdn_sandbox_admin)
 "${PSQL[@]}" -d postgres -q <<'SQL'
