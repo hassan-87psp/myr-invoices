@@ -128,6 +128,8 @@ def status_change(x,response,environment,now):
     if validated is not None:
         require(validated<=clock(now)+timedelta(seconds=60),"Future validation timestamp")
         if x.get("validated_at") is not None:require(validated==x["validated_at"],"Validation timestamp changed")
+    if state=="valid" and x.get("long_id") is not None:
+        require(parsed["long_id"]==x["long_id"],"Verification identifier changed")
     return {"state":state,"long_id":parsed["long_id"],"validated_at":validated,
             "verification_url":parsed["verification_url"]}
 
@@ -145,8 +147,9 @@ def sync(conn,company_id,invoice_id,environment,response,now):
 def poll_plan(x,now,retry_header=None):
     require(x["state"] in ("accepted","valid"),"No active polling")
     seconds=5 if retry_header is None else retry_after(retry_header,clock(now))
-    due=clock(x["updated_at"])+timedelta(seconds=seconds)
-    require(clock(now)>=due,"Polling interval or provider backoff not elapsed")
+    # Compare elapsed seconds rather than constructing a possibly overflowing date.
+    elapsed=(clock(now)-clock(x["updated_at"])).total_seconds()
+    require(elapsed>=seconds,"Polling interval or provider backoff not elapsed")
     return submission_path(Receipt(x["submission"],x["uuid"],x["code"]))
 
 def cancel_plan(x,now,reason):
@@ -172,6 +175,11 @@ class LifecycleTests(unittest.TestCase):
     def test_no_regression(self):
         self.x["state"]="valid";self.response["documentSummary"][0]["status"]="Submitted"
         with self.assertRaises(ValueError):status_change(self.x,self.response,"sandbox",self.now)
+    def test_verification_identifier_immutable(self):
+        self.x.update(state="valid",long_id="LONG123",validated_at=self.now)
+        self.assertEqual(status_change(self.x,self.response,"sandbox",self.now)["long_id"],"LONG123")
+        self.response["documentSummary"][0]["longId"]="OTHER123"
+        with self.assertRaises(ValueError):status_change(self.x,self.response,"sandbox",self.now)
     def test_cancel(self):
         self.x.update(state="valid",validated_at=self.now)
         self.assertEqual(cancel_plan(self.x,self.now,"Incorrect invoice")[1]["status"],"cancelled")
@@ -179,6 +187,7 @@ class LifecycleTests(unittest.TestCase):
     def test_poll_backoff(self):
         self.assertIn("SUB123",poll_plan(self.x,self.now))
         with self.assertRaises(ValueError):poll_plan(self.x,self.now,"60")
+        with self.assertRaises(ValueError):poll_plan(self.x,self.now,"999999999999")
         self.x["state"]="outcome_unknown"
         with self.assertRaises(ValueError):poll_plan(self.x,self.now)
     def test_production_blocked(self):
