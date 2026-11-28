@@ -143,6 +143,19 @@
           "new": "<meta name=\"twitter:description\" content=\"Create invoices and PDF quotations, manage customers and track payments in MYR Invoice. Malaysian SME invoicing software with MyInvois preparation tools.\">"
         }
       ]
+    },
+    {
+      "id": "seo-rendered-title-v1",
+      "replacements": [
+        {
+          "old": "if(!privateRoute)document.title=\"Invoice Software Malaysia | MYR Invoice – E-Invoicing\";",
+          "new": "if(!privateRoute)document.title=\"Invoice Software Malaysia for SMEs | MYR Invoice\";"
+        },
+        {
+          "old": "function vSite(){document.title=\"Invoice Software Malaysia | MYR Invoice – E-Invoicing\";",
+          "new": "function vSite(){document.title=\"Invoice Software Malaysia for SMEs | MYR Invoice\";"
+        }
+      ]
     }
   ]
 }
