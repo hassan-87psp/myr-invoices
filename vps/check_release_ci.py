@@ -74,6 +74,53 @@ if(!ready.includes('Not verified by configuration check') || !ready.includes('In
 """,text=True)
     print("MYR_SANDBOX_ADMIN_READINESS_OK",flush=True)
 
+def onboarding_check():
+    html=(ROOT/"index.html").read_text()
+    m=json.loads((ROOT/"vps/approved-frontend-releases.json").read_text())
+    rel=next(r for r in m["releases"] if r["id"]=="business-onboarding-friendly-v1")
+    for p in rel["replacements"]:
+        assert html.count(p["new"])==1
+    helper=html[html.index("const MYR_OB_MSIC="):html.index("function vOnboarding(){")]
+    fixture=r"""
+const els={};
+const $=id=>els[id]??=( {value:'',disabled:false,required:false,hidden:false,textContent:'',innerHTML:'',reportValidity:()=>true} );
+const val=id=>$('#'+id).value.trim();
+const opt=(list)=>JSON.stringify(list);
+const TIN_RE=/^C[0-9]{8,12}$/;
+let saved=0,errors=[];
+const toast=m=>errors.push(m);
+const saveOnboard=async()=>{saved++};
+"""
+    tests=r"""
+(async()=>{
+if(MYR_OB_MSIC.length!==1175 || new Set(MYR_OB_MSIC.map(r=>r[0])).size!==1174)throw Error('MSIC data count');
+if(myrObMatches('01111')[0]?.desc!=='Growing of maize'||!myrObMatches('programming').some(x=>x.code==='62010'))throw Error('MSIC search');
+$('#ob-msic-search').value='01111';myrObSearch();
+if(val('ob-msic')!=='01111'||val('ob-msicd')!=='Growing of maize')throw Error('Code/description selection');
+$('#ob-sst-status').value='yes';myrObSst();
+if(!$('#ob-sst').required||$('#ob-sst').disabled||$('#ob-sst-wrap').hidden)throw Error('SST yes');
+$('#ob-sst').value='SST123';
+$('#ob-sst-status').value='no';myrObSst();
+if(val('ob-sst')!=='NA'||!$('#ob-sst').disabled||!$('#ob-sst-wrap').hidden)throw Error('SST no');
+$('#myr-onboard-fields').querySelectorAll=()=>[];
+$('#ob-tin').value='C1234567890';const btn={disabled:false,isConnected:true};
+await myrObSubmit(btn);
+if(saved!==1||btn.disabled)throw Error('Submit must preserve original handler');
+$('#ob-sst-status').value='yes';myrObSst();await myrObSubmit(btn);
+if(saved!==1||!errors.at(-1).includes('SST'))throw Error('SST missing gate');
+$('#ob-msic-search').value='zzzz-no-match';myrObSearch();
+$('#ob-msic-select').value='';myrObSelect();
+if(val('ob-msic')||val('ob-msicd'))throw Error('Stale MSIC');
+})().catch(e=>{console.error(e);process.exitCode=1});
+"""
+    run("node","-",input=fixture+helper+tests,text=True)
+    for marker in ("Tax Identification Number (TIN)","Business Registration Number (BRN)",
+                   "Malaysia Standard Industrial Classification (MSIC)","Where to find this?",
+                   "Registered Business Address","Automatically uses your account email",
+                   "Starter plan automatically selected","@media(max-width:560px)"):
+        assert marker in html,marker
+    print("MYR_GUIDED_ONBOARDING_OK",flush=True)
+
 def main():
     for p in sorted((ROOT/"vps/backend").rglob("*.py")):
         ast.parse(p.read_text(),filename=str(p))
@@ -85,6 +132,7 @@ def main():
         run("bash","-n",p)
     manifest_check()
     sandbox_admin_check()
+    onboarding_check()
     run(sys.executable,"-B",ROOT/"vps/check_legacy_deployment_guard.py")
     run(sys.executable,"-B",ROOT/"vps/check_validation_redaction.py")
     run(sys.executable,"-B",ROOT/"vps/check_security_regression.py")
