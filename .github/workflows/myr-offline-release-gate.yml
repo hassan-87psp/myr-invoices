@@ -1,0 +1,21 @@
+name: MYR offline release gate
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: myr-offline-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  static-and-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check Python, JavaScript, shell and offline business rules
+        run: python3 -B vps/check_release_ci.py
