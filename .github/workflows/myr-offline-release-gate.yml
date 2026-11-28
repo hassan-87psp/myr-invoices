@@ -19,3 +19,26 @@ jobs:
           persist-credentials: false
       - name: Check Python, JavaScript, shell and offline business rules
         run: python3 -B vps/check_release_ci.py
+  lhdn-edge-mocks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Verify LHDN bridge authorization, TIN and retry contract using mocks
+        run: |
+          node --experimental-strip-types --input-type=module <<'NODE'
+          const tests = [];
+          globalThis.fetch = async () => { throw new Error('Real network requests forbidden'); };
+          globalThis.Deno = { test: (name, fn) => tests.push([name, fn]) };
+          await import('./supabase/functions/myr-lhdn-intermediary/index_test.ts');
+          await import('./supabase/functions/myr-lhdn-intermediary/sandbox_transport_candidate_test.ts');
+          await import('./supabase/functions/myr-lhdn-intermediary/sandbox_dispatch_bridge_candidate_test.ts');
+          if (tests.length < 13) throw new Error('Missing LHDN regression tests');
+          for (const [name, fn] of tests) { await fn(); console.log('PASS', name); }
+          console.log('MYR_LHDN_EDGE_MOCKS_OK', tests.length);
+          NODE

@@ -9,6 +9,7 @@ function snippet(from,to){
  return source.slice(a,b);
 }
 const bSaveSource=snippet('async function bSave(status){','function bPreview(){');
+const draftFieldsSource=snippet('function myrDraftFields(','function myrDraftRead(');
 const paymentSource=snippet('async function savePay(id){','function remind(id){');
 const sampleInv={
  id:'i1',number:'INV-1001',_autoNumber:'INV-1001',
@@ -20,7 +21,7 @@ async function testAtomicInvoice(){
  const ed=JSON.parse(JSON.stringify(sampleInv));
  const called=[];let navigation='',saved=false;
  const sandbox=vm.createContext({
-  ED:ed,CO:()=>co, myrDraftClear:()=>{},CLOUD:true,CFG:{atomicRecordWrites:true},
+  ED:ed,CO:()=>co, MYR_INV_BASE:'',myrDraftClear:()=>{},CLOUD:true,CFG:{atomicRecordWrites:true},
   atomicEnabled:()=>true,atomicReady:async()=>true,
   INVOICE_SAVING:false,UNSYNCED_CLOUD:false,
   can:()=>true,bCheck:()=>({errors:[]}),
@@ -40,7 +41,7 @@ async function testAtomicInvoice(){
    throw Error('Unexpected RPC '+name);
   }}
  });
- vm.runInContext(bSaveSource+'\nthis.saveInvoice=bSave;',sandbox);
+ vm.runInContext(draftFieldsSource+bSaveSource+'\nthis.saveInvoice=bSave;',sandbox);
  await sandbox.saveInvoice();
  assert.equal(called.length,2,'Two-stage atomic numbering and save');
  assert.equal(called[0].name,'reserve_invoice_number');
@@ -52,6 +53,7 @@ async function testAtomicInvoice(){
  assert.equal(co.invoices.length,1,'Server response drives local state');
  assert.equal(saved,false,'No whole company JSON overwrite');
  assert.match(navigation,/\/view\/i1$/);
+ assert.equal(JSON.parse(sandbox.MYR_INV_BASE).number,'INV-1007','Draft baseline follows atomic reservation');
 
  const failed=vm.createContext({
   ED:{...sampleInv},CO:()=>({id:'c1',prefix:'INV-',nextNo:1001,invoices:[],approvalRequired:false}),

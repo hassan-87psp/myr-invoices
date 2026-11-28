@@ -3,10 +3,11 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const src=fs.readFileSync('index.html','utf8');
-const start=src.indexOf('function docHTML('),end=src.indexOf('function printDoc()',start);
+const start=src.indexOf('function myrPdfLines('),end=src.indexOf('function printDoc()',start);
 assert.ok(start>=0&&end>start,'PDF document renderer exists');
 const calc=src.split('\n').find(x=>x.startsWith('function calc(inv)'));
 assert.ok(calc,'Financial calculation used by renderer exists');
+const deps=['const UNITS=','const TAX_TYPES=','const portalBase=','const verifyUrl='].map(prefix=>{const line=src.split('\n').find(x=>x.startsWith(prefix));assert.ok(line,'Missing real renderer dependency '+prefix);return line;}).join('\n');
 let qrCalls=0;
 const ctx=vm.createContext({
  STATES:[],DOC_TYPES:{'01':'Invoice'},
@@ -14,10 +15,9 @@ const ctx=vm.createContext({
  esc:x=>String(x??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])),
  money:x=>'RM '+(Number(x)/100).toFixed(2),
  fmtDate:x=>x||'—',fmtDT:x=>x||'—',
- verifyUrl:(_co,inv)=>inv.lhdn.status==='Valid'?'https://myinvois.example.invalid/verify':'',
  qrSvg:()=>{qrCalls++;return '<svg data-qr="yes"></svg>'}
 });
-vm.runInContext(calc+src.slice(start,end)+'\nthis.draw=docHTML;',ctx);
+vm.runInContext(deps+'\n'+calc+'\n'+src.slice(start,end)+'\nthis.draw=docHTML;',ctx);
 const co={
  name:'Fictional Seller',tin:'C1234567890',brn:'202601000001',
  msic:'62010',msicDesc:'Services',phone:'',email:'',
@@ -33,18 +33,29 @@ const inv={
  notes:'',payTerms:'Net 30',lhdn:{status:'Not Submitted',uuid:''}
 };
 let html=ctx.draw(inv,co);
-assert.match(html,/NOT YET<br>VALIDATED/,'Draft must be visibly unvalidated');
-assert.match(html,/Not an official e-Invoice yet/);
+assert.match(html,/myr-paper-state pending[^>]*>Not yet validated by LHDN/,'Draft must be visibly unvalidated');
+assert.match(html,/Official UUID, validation date-time and verification QR are displayed only after LHDN returns a Valid status/);
 assert.match(html,/RM 25\.00/,'Correct total on print document');
 assert.ok(html.includes('&lt;b&gt;test&lt;/b&gt;'),'Line descriptions are escaped');
 assert.ok(html.includes('&lt;script&gt;'),'Buyer name is escaped');
 assert.ok(!html.includes('onerror="alert(1)"'),'Logo attribute cannot inject HTML');
 assert.equal(qrCalls,0,'Draft invoice must not show verification QR');
 html=ctx.draw(inv,co,{sample:true});
-assert.match(html,/SAMPLE<br>NOT VALIDATED/,'Sample must be prominently marked');
+assert.match(html,/Sample · Not validated/,'Sample must be prominently marked');
+assert.equal(qrCalls,0);
 inv.lhdn.status='Valid';
 inv.lhdn.uuid='official-demo-uuid';
 html=ctx.draw(inv,co);
+assert.equal(qrCalls,0,'Valid status without longId must not show verification QR');
+inv.lhdn.longId='verified-long-id';
+html=ctx.draw(inv,co);
 assert.match(html,/Validated by LHDN MyInvois/);
 assert.equal(qrCalls,1,'Verification QR displayed only when Valid status has URL');
+assert.ok(html.includes('https://preprod.myinvois.hasil.gov.my/official-demo-uuid/share/verified-long-id'));
+ctx.draw(inv,co,{sample:true});
+assert.equal(qrCalls,1,'Sample never shows a verification QR');
+inv.lhdn.status='Cancelled';
+html=ctx.draw(inv,co);
+assert.match(html,/Cancelled document/);
+assert.equal(qrCalls,1,'Cancelled invoice must not show QR');
 console.log('PASS: invoice printable HTML, unvalidated watermark, safe text/logo rendering, QR gating');
