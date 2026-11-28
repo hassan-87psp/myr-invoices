@@ -34,6 +34,7 @@ def main():
     manifest_check()
     run(sys.executable,"-B",ROOT/"vps/check_legacy_deployment_guard.py")
     run(sys.executable,"-B",ROOT/"vps/check_validation_redaction.py")
+    run(sys.executable,"-B",ROOT/"vps/check_security_regression.py")
     run(sys.executable,"-B",ROOT/"vps/check_public_seo.py")
     run(sys.executable,"-B",ROOT/"vps/backend/check_private_reliability.py","--selftest")
     run("node",ROOT/"vps/check_account_link_scope.mjs")
