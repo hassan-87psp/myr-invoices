@@ -318,6 +318,8 @@ def admin_dashboard(request:Request,conn=Depends(db)):
     profile=admin_identity(conn,request)
     data=dashboard(conn,profile)
     data["central_lhdn"]=central_lhdn.configuration_status()
+    # Separate read-only sandbox readiness. Only platform administrators reach this route.
+    data["central_lhdn"]["sandbox"]=central_lhdn.sandbox_configuration_status()
     return data
 
 @api.get("/admin/companies")
