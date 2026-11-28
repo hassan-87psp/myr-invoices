@@ -16,7 +16,8 @@ def main():
         raise RuntimeError("Private restored database required")
     with psycopg.connect(host=str(root/"socket"),port=55440,dbname="myr_restore_rehearsal",
           user="myr_restore_test",sslmode="disable",connect_timeout=5) as conn:
-        assert conn.execute("SELECT current_database(),current_user,inet_server_addr()").fetchone()==("myr_restore_rehearsal","myr_restore_test",None)
+        if conn.execute("SELECT current_database(),current_user,inet_server_addr()").fetchone()!=("myr_restore_rehearsal","myr_restore_test",None):
+            raise RuntimeError("Wrong database identity; migration rehearsal refused")
         try:
             conn.execute((Path(__file__).resolve().parent.parent/"billing-ledger.review.sql").read_text())
             conn.execute("""CREATE ROLE myr_billing_rehearsal NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
