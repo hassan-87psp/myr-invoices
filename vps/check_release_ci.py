@@ -267,6 +267,7 @@ def main():
     run(sys.executable,"-B",ROOT/"vps/check_security_regression.py")
     run(sys.executable,"-B",ROOT/"vps/check_public_seo.py")
     run(sys.executable,"-B",ROOT/"vps/backend/check_private_reliability.py","--selftest")
+    run(sys.executable,"-B",ROOT/"vps/backend/check_pilot_preflight.py","--selftest")
     run("node",ROOT/"vps/check_account_link_scope.mjs")
     run("node",ROOT/"vps/check_invoice_rounding.mjs")
     run("node",ROOT/"vps/check_mobile_suggestions.mjs")
