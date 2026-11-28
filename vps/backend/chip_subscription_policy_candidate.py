@@ -18,12 +18,16 @@ def next_charge(sub,today,*,gateway_approved=False,live_enabled=False):
     if type(today) is not date:raise ValueError("Invalid date")
     if live_enabled is not True or gateway_approved is not True:return {"action":"disabled"}
     if sub.get("open_payment") is True:return {"action":"reconcile_existing"}
+    if sub.get("open_payment") is not False:return {"action":"manual_review_payment_state"}
     if sub["state"]!="active" or sub.get("cancel_at_period_end") is True:return {"action":"no_charge"}
+    if sub.get("cancel_at_period_end") is not False:return {"action":"manual_review_cancellation_state"}
     if sub.get("consent") is not True or sub.get("token_verified") is not True:return {"action":"manual_renewal"}
     plan=sub["plan"]; amount=CATALOG.get(plan)
-    if amount is None or sub.get("consented_amount_sen")!=amount or sub.get("consented_currency")!="MYR":
+    if amount is None or type(sub.get("consented_amount_sen")) is not int or sub.get("consented_amount_sen")!=amount or sub.get("consented_currency")!="MYR":
         return {"action":"new_consent_required"}
-    if type(sub.get("period_end")) is not date:raise ValueError("Invalid period end")
+    start,end,anchor=sub.get("period_start"),sub.get("period_end"),sub.get("anchor_day")
+    if type(start) is not date or type(end) is not date or end<=start or end!=renewal_date(start,anchor):
+        raise ValueError("Invalid subscription period")
     if today<sub["period_end"]:return {"action":"not_due"}
     if today>sub["period_end"]:return {"action":"manual_review_overdue"}
     return {"action":"reserve_renewal","amount_sen":amount,"currency":"MYR",
@@ -75,7 +79,8 @@ def paid_period(intent,verified,*,live_enabled=False):
     if verified.get("status")!="paid" or verified.get("marked_as_paid") is not False or verified.get("is_outgoing") is not False:
         raise ValueError("Unverified incoming payment")
     amount=CATALOG.get(intent.get("plan"))
-    if amount is None or intent.get("amount_sen")!=amount or verified.get("amount_sen")!=amount or verified.get("currency")!="MYR":
+    if (amount is None or type(intent.get("amount_sen")) is not int or type(verified.get("amount_sen")) is not int
+        or intent.get("amount_sen")!=amount or verified.get("amount_sen")!=amount or verified.get("currency")!="MYR"):
         raise ValueError("Plan or amount mismatch")
     start=intent["period_start"]; end=intent["period_end"]
     if end!=renewal_date(start,intent["anchor_day"]):raise ValueError("Period mismatch")
@@ -90,7 +95,7 @@ if __name__=="__main__":
     assert renewal_date(date(2028,1,31),31)==date(2028,2,29)
     assert renewal_date(date(2026,12,31),31)==date(2027,1,31)
     sub=dict(state="active",plan="Pro",consent=True,token_verified=True,consented_amount_sen=1900,
-             consented_currency="MYR",period_end=b,anchor_day=31)
+             consented_currency="MYR",period_start=a,period_end=b,anchor_day=31,open_payment=False,cancel_at_period_end=False)
     def decide(**changes):return next_charge({**sub,**changes},b,gateway_approved=True,live_enabled=True)["action"]
     assert next_charge(sub,b)["action"]=="disabled"
     assert decide()=="reserve_renewal"
@@ -99,6 +104,13 @@ if __name__=="__main__":
     assert decide(token_verified=False)=="manual_renewal"
     assert decide(consented_amount_sen=900)=="new_consent_required"
     assert decide(open_payment=True)=="reconcile_existing"
+    assert decide(open_payment=None)=="manual_review_payment_state"
+    assert decide(open_payment="false")=="manual_review_payment_state"
+    assert decide(cancel_at_period_end=None)=="manual_review_cancellation_state"
+    assert decide(consented_amount_sen=1900.0)=="new_consent_required"
+    try:decide(period_start=b)
+    except ValueError:pass
+    else:raise AssertionError("Invalid billing period accepted")
     assert next_charge(sub,a,gateway_approved=True,live_enabled=True)["action"]=="not_due"
     assert next_charge(sub,date(2026,3,1),gateway_approved=True,live_enabled=True)["action"]=="manual_review_overdue"
     pid=uuid4()
@@ -107,7 +119,7 @@ if __name__=="__main__":
     v=dict(is_test=False,provider_id=pid,status="paid",marked_as_paid=False,is_outgoing=False,amount_sen=1900,currency="MYR")
     assert paid_period(i,v,live_enabled=True)["plan"]=="Pro"
     for bad in (dict(is_test=True),dict(is_test=None),dict(status="pending_charge"),dict(marked_as_paid=True),
-                dict(is_outgoing=True),dict(amount_sen=1899),dict(currency="USD"),dict(provider_id=uuid4())):
+                dict(is_outgoing=True),dict(amount_sen=1899),dict(amount_sen=1900.0),dict(currency="USD"),dict(provider_id=uuid4())):
         try:paid_period(i,{**v,**bad},live_enabled=True)
         except ValueError:pass
         else:raise AssertionError("Unsafe activation accepted")
