@@ -100,7 +100,9 @@ def parse_status(data,receipt,issuer_tin,env):
     environment(env)
     require(isinstance(data,dict) and data.get("submissionUid")==receipt.submission_uid,"Submission mismatch")
     summaries=data.get("documentSummary")
-    require(isinstance(summaries,list),"Missing summary")
+    require(isinstance(summaries,list) and len(summaries)==1,"Expected single-document submission")
+    if "documentCount" in data:
+        require(type(data["documentCount"]) is int and data["documentCount"]==1,"Unexpected submission document count")
     items=[x for x in summaries if isinstance(x,dict) and x.get("uuid")==receipt.uuid]
     require(len(items)==1,"Document not uniquely found")
     row=items[0]
@@ -111,7 +113,9 @@ def parse_status(data,receipt,issuer_tin,env):
     if status=="Valid":
         require(bool(long_id),"Valid document missing verification ID")
         require(isinstance(row.get("dateTimeValidated"),str),"Missing validation timestamp")
-        parse_time(row["dateTimeValidated"])
+        validated=parse_time(row["dateTimeValidated"])
+        if row.get("dateTimeReceived") is not None:
+            require(parse_time(row["dateTimeReceived"])<=validated,"Validation predates submission")
     return {"status":status,"uuid":receipt.uuid,"submission_uid":receipt.submission_uid,
             "long_id":identifier(long_id) if status=="Valid" else None,
             "validated_at":row.get("dateTimeValidated") if status=="Valid" else None,
@@ -189,6 +193,13 @@ class ContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):parse_status(data,self.receipt,"C0000000000","sandbox")
         self.row["status"]="Submitted"
         self.assertIsNone(parse_status(data,self.receipt,"C1234567890","sandbox")["verification_url"])
+    def test_single_document_scope(self):
+        data={"submissionUid":"SUB123","documentCount":1,"documentSummary":[self.row]}
+        self.assertEqual(parse_status(data,self.receipt,"C1234567890","sandbox")["status"],"Valid")
+        with self.assertRaises(ValueError):parse_status({**data,"documentCount":2},self.receipt,"C1234567890","sandbox")
+        with self.assertRaises(ValueError):parse_status({**data,"documentSummary":[self.row,{**self.row,"uuid":"OTHER"}]},self.receipt,"C1234567890","sandbox")
+        self.row["dateTimeReceived"]="2026-11-27T00:00:00Z"
+        with self.assertRaises(ValueError):parse_status(data,self.receipt,"C1234567890","sandbox")
     def test_cancel(self):
         now=parse_time("2026-11-28T23:59:59Z")
         self.assertEqual(cancellation_request(self.receipt,"Valid","2026-11-26T00:00:00Z",now,"Wrong details")[1]["status"],"cancelled")
