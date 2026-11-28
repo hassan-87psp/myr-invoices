@@ -1,7 +1,7 @@
 // Staged, private, connection-only read/poll bridge. No document submission.
 // The exact receipt grant must be operator-installed; never issue it to a browser.
 // No deployment entrypoint is provided until isolated DB, grants and release review pass.
-import {pollSandbox} from "./sandbox_transport_candidate.ts";
+import {pollSandbox,pollRetrySeconds} from "./sandbox_transport_candidate.ts";
 const BASE="https://preprod-api.myinvois.hasil.gov.my";
 const enc=new TextEncoder();
 type Env=(name:string)=>string|undefined;
@@ -57,7 +57,7 @@ export function createPollCandidate(env:Env,send:typeof fetch=fetch,clock=Date.n
    try{
     // Fresh login for this short-lived, operator-only pilot; no cached authorization after revocation.
     const tokenResponse=await send(BASE+"/connect/token",{method:"POST",redirect:"error",signal:AbortSignal.timeout(20000),headers:{"Content-Type":"application/x-www-form-urlencoded",Accept:"application/json",onbehalfof:g.taxpayer},body:new URLSearchParams({client_id:id,client_secret:secret,grant_type:"client_credentials",scope:"InvoicingAPI"})});
-    if(tokenResponse.status!==200){await tokenResponse.body?.cancel();return reply(502,{state:"poll_unavailable",retry_after:60})}
+    if(tokenResponse.status!==200){const delay=pollRetrySeconds(tokenResponse.headers.get("Retry-After"),clock());await tokenResponse.body?.cancel();return reply(502,{state:"poll_unavailable",retry_after:delay})}
     const token=await bounded(tokenResponse.body,65536);
     if(!object(token)||typeof token.access_token!=="string"||String(token.token_type).toLowerCase()!=="bearer"||typeof token.expires_in!=="number"||token.expires_in<=60)return reply(502,{state:"poll_unavailable",retry_after:60});
     const current=grant(env,clock());
