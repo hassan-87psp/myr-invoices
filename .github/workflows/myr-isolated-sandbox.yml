@@ -1,0 +1,26 @@
+name: MYR isolated Sandbox rehearsal
+on:
+  pull_request:
+    paths:
+      - 'vps/**'
+      - '.github/workflows/myr-isolated-sandbox.yml'
+permissions:
+  contents: read
+jobs:
+  isolated-postgres:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install disposable runner dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql python3-psycopg python3-cryptography
+      - name: Real private PostgreSQL synthetic rehearsal
+        env:
+          MYR_SANDBOX_TEST_PYTHON: /usr/bin/python3
+        run: bash vps/prepare-lhdn-isolated-sandbox.sh --rehearse
+      - name: Offline certificate primitive tests
+        run: /usr/bin/python3 -B vps/backend/lhdn_signing_candidate.py
