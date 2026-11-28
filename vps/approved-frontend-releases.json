@@ -114,6 +114,35 @@
           "new": "@media(max-width:767px){#bwrap #inv-details .myr-simple-options{grid-template-columns:repeat(2,minmax(0,1fr))}#bwrap .myr-inv-search-field input{font-size:13px}#bwrap .myr-inv-recovery{margin-bottom:3px}}\n@media(max-width:767px){.myr-inv-suggestions button{min-height:44px;touch-action:manipulation}.myr-business #bwrap .myr-simple-card input:not([type=checkbox]):focus,.myr-business #bwrap .myr-simple-card select:focus,.myr-business #bwrap textarea:focus{font-size:16px!important}.myr-business #bwrap input,.myr-business #bwrap select,.myr-business #bwrap textarea{scroll-margin-block:90px}.myr-inv-suggestions{overscroll-behavior:contain;touch-action:pan-y}}"
         }
       ]
+    },
+    {
+      "id": "seo-homepage-metadata-v1",
+      "replacements": [
+        {
+          "old": "<title>Invoice Software Malaysia | MYR Invoice – E-Invoicing</title>",
+          "new": "<title>Invoice Software Malaysia for SMEs | MYR Invoice</title>"
+        },
+        {
+          "old": "<meta property=\"og:title\" content=\"Invoice Software Malaysia | MYR Invoice – E-Invoicing\">",
+          "new": "<meta property=\"og:title\" content=\"Invoice Software Malaysia for SMEs | MYR Invoice\">"
+        },
+        {
+          "old": "<meta name=\"twitter:title\" content=\"Invoice Software Malaysia | MYR Invoice – E-Invoicing\">",
+          "new": "<meta name=\"twitter:title\" content=\"Invoice Software Malaysia for SMEs | MYR Invoice\">"
+        },
+        {
+          "old": "<meta name=\"description\" content=\"Create professional invoices, manage customers, track payments and prepare for LHDN MyInvois with MYR Invoice, a Malaysian business invoicing workspace.\">",
+          "new": "<meta name=\"description\" content=\"Create invoices and PDF quotations, manage customers and track payments in MYR Invoice. Malaysian SME invoicing software with MyInvois preparation tools.\">"
+        },
+        {
+          "old": "<meta property=\"og:description\" content=\"Create professional invoices, manage customers, track payments and prepare for LHDN MyInvois with MYR Invoice, a Malaysian business invoicing workspace.\">",
+          "new": "<meta property=\"og:description\" content=\"Create invoices and PDF quotations, manage customers and track payments in MYR Invoice. Malaysian SME invoicing software with MyInvois preparation tools.\">"
+        },
+        {
+          "old": "<meta name=\"twitter:description\" content=\"Create professional invoices, manage customers, track payments and prepare for LHDN MyInvois with MYR Invoice, a Malaysian business invoicing workspace.\">",
+          "new": "<meta name=\"twitter:description\" content=\"Create invoices and PDF quotations, manage customers and track payments in MYR Invoice. Malaysian SME invoicing software with MyInvois preparation tools.\">"
+        }
+      ]
     }
   ]
 }
