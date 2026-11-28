@@ -65,7 +65,12 @@ def main():
     check(out("id","-un")=="myradmin","Run as myradmin")
     for marker in ("production-writes-enabled","native-auth-pilot-enabled"):
         check((CONFIG/marker).read_text().strip()==PIN,"Unexpected production marker")
-    check(CORE.is_dir() and not UNIT.exists() and not SIDE.exists() and not RECOVERY.exists(),"Existing or interrupted billing release; review first")
+    check(CORE.is_dir() and not UNIT.exists(),"Core missing or billing unit already exists; review first")
+    resume=RECOVERY.is_dir() and SIDE.is_dir()
+    check(resume or (not SIDE.exists() and not RECOVERY.exists()),"Incomplete recovery state; review first")
+    if resume:
+        for p in (SIDE,RECOVERY):
+            check(not p.is_symlink() and p.stat().st_uid==os.getuid() and not (p.stat().st_mode&0o077),"Unsafe recovery directory")
     check(not active("myr-billing-readonly.service"),"Billing service already active")
     for timer in ("myr-static-deploy.timer","myr-core-backend-deploy.timer","myr-core-frontend-deploy.timer"):
         check(not active(timer) and not active(timer.replace(".timer",".service")),"Auto-deploy active: refuse to overwrite")
@@ -89,14 +94,27 @@ def main():
         anchor="location ^~ /api/myr/ {"
         check(original.count(anchor)==1 and "/api/myr/billing/" not in original,"Unexpected nginx routing")
         nginx=original.replace(anchor,route("billing/customer")+"\n"+route("billing/admin/sandbox")+"\n"+anchor,1)
-        check(db_exists()==0,"Billing tables already exist; review permissions and schema before retry")
+        if resume:
+            check((RECOVERY/"previous-web").read_text().strip()==str(previous),"Live frontend differs from recovery snapshot")
+            check((RECOVERY/"nginx.conf").read_text()==original,"Nginx differs from rollback snapshot")
+            check(db_exists()==4,"Incomplete retained billing schema")
+            for table in TABLES:
+                q="SELECT count(*) FROM myr_native."+table
+                check(out("sudo","-u","postgres","psql","-X","-At","-d","myrinvoice","-c",q)=="0","Retained ledger is not empty; stop for review")
+                q=("SELECT has_table_privilege('myrinvoice_app','myr_native."+table+"','SELECT') AND NOT ("
+                   +" OR ".join("has_table_privilege('myrinvoice_app','myr_native."+table+"','"+p+"')" for p in ("INSERT","UPDATE","DELETE","TRUNCATE","TRIGGER","REFERENCES"))+")")
+                check(out("sudo","-u","postgres","psql","-X","-At","-d","myrinvoice","-c",q)=="t","Retained ledger grants not read-only")
+            print("MYR_BILLING_ROLLBACK_STATE_VERIFIED",flush=True)
+        else:
+            check(db_exists()==0,"Billing tables already exist; review permissions and schema before retry")
         run(PY,"-B",ROOT/"vps/backend/native_backup.py")
         commit=out("git","-C",ROOT,"rev-parse","--short=12","HEAD")
         release=BASE/"releases"/("vps-frontend-billing-"+commit+"-"+str(int(time.time())))
         check(not release.exists(),"Release already exists")
-        RECOVERY.mkdir(mode=0o700)
-        (RECOVERY/"previous-web").write_text(str(previous)+"\n")
-        (RECOVERY/"nginx.conf").write_text(original)
+        if not resume:
+            RECOVERY.mkdir(mode=0o700)
+            (RECOVERY/"previous-web").write_text(str(previous)+"\n")
+            (RECOVERY/"nginx.conf").write_text(original)
         changed_nginx=False
         changed_link=False
         service_created=False
@@ -105,9 +123,12 @@ def main():
             sql="\n".join((ROOT/"vps"/f).read_text() for f in ("billing-ledger.review.sql","chip-test-ledger.review.sql"))
             names=", ".join("myr_native."+t for t in TABLES)
             sql+="\nREVOKE ALL ON "+names+" FROM myrinvoice_app;\nGRANT SELECT ON "+names+" TO myrinvoice_app;\n"
-            run("sudo","-u","postgres","psql","-X","-v","ON_ERROR_STOP=1","-1","-d","myrinvoice",input=sql,text=True)
+            if not resume:
+                run("sudo","-u","postgres","psql","-X","-v","ON_ERROR_STOP=1","-1","-d","myrinvoice",input=sql,text=True)
             check(db_exists()==4,"Ledger schema not complete")
-            SIDE.mkdir(mode=0o700,parents=True)
+            SIDE.mkdir(mode=0o700,parents=True,exist_ok=resume)
+            check(not any(p.is_symlink() for p in SIDE.iterdir()),"Unsafe sidecar file")
+            print("MYR_BILLING_SCHEMA_READY",flush=True)
             for name in FILES:shutil.copy2(ROOT/"vps/backend"/name,SIDE/name)
             unit="[Unit]\nDescription=MYR read-only billing sidecar\nAfter=network.target\n[Service]\nType=simple\nWorkingDirectory="+str(SIDE)+"\nEnvironment=MYR_PRODUCTION_RELEASE="+PIN+"\nEnvironment=PYTHONPATH="+str(CORE)+"\nExecStart="+str(PY)+" -B -m uvicorn billing_readonly_app:api --host 127.0.0.1 --port 8768\nRestart=on-failure\nNoNewPrivileges=true\n[Install]\nWantedBy=default.target\n"
             UNIT.parent.mkdir(parents=True,exist_ok=True)
@@ -122,9 +143,16 @@ def main():
                 except (ValueError,subprocess.CalledProcessError):pass
                 time.sleep(1)
             else:raise RuntimeError("Billing sidecar health failed")
-            shutil.copytree(previous,release)
-            (release/"index.html").write_text(html)
-            (release/"index.html").chmod(0o644)
+            print("MYR_BILLING_SIDECAR_HEALTH_OK",flush=True)
+            # Build assets with public permissions only; the process umask is otherwise private.
+            old_mask=os.umask(0o022)
+            try:
+                shutil.copytree(previous,release)
+                (release/"index.html").write_text(html)
+                (release/"index.html").chmod(0o644)
+                release.chmod(0o755)
+            finally:os.umask(old_mask)
+            print("MYR_BILLING_FRONTEND_STAGED",flush=True)
             with tempfile.NamedTemporaryFile(mode="w",dir=HOME,delete=False) as f:
                 f.write(nginx);tmp=f.name
             try:
@@ -133,6 +161,7 @@ def main():
             finally:Path(tmp).unlink(missing_ok=True)
             run("sudo","nginx","-t")
             run("sudo","systemctl","reload","nginx")
+            print("MYR_BILLING_NGINX_RELOADED",flush=True)
             check(probe("/api/myr/billing/customer?company_id=00000000-0000-0000-0000-000000000000")=="401","Billing owner auth failed")
             check(probe("/api/myr/billing/admin/sandbox")=="401","Billing admin auth failed")
             check(probe("/api/myr/billing/admin/sandbox/checkout")=="404","Checkout unexpectedly exposed")
@@ -146,7 +175,8 @@ def main():
             print("MYR_READONLY_BILLING_LIVE_OK")
             print("Customer billing history and admin status only. Actual payments and LHDN remain gated; core service and authentication unchanged.")
             print("Recovery configuration saved privately in",RECOVERY)
-        except BaseException:
+        except BaseException as error:
+            print("MYR_BILLING_DEPLOY_FAILURE",type(error).__name__,str(error),flush=True)
             if changed_link:link(previous)
             if changed_nginx:
                 run("sudo","install","-m","0644",RECOVERY/"nginx.conf",CONF)
