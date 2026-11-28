@@ -27,10 +27,14 @@ async function read(res:Response){
   }
   return JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(bytes.subarray(0,size)));
 }
-function wait(res:Response){
-  const v=res.headers.get("Retry-After");if(v&&/^\d{1,12}$/.test(v))return Math.max(5,Number(v));
-  const d=v?Date.parse(v):NaN;return Number.isFinite(d)?Math.max(5,Math.ceil((d-Date.now())/1000)):60;
+// Extremely long provider backoff becomes an explicit manual-review sentinel.
+export function pollRetrySeconds(v:string|null,now=Date.now()){
+  if(v&&/^\d+$/.test(v)){const n=Number(v);return !Number.isSafeInteger(n)||n>604800?604801:Math.max(5,n);}
+  const d=v?Date.parse(v):NaN;
+  if(!Number.isFinite(d))return 60;
+  const n=Math.ceil((d-now)/1000);return n>604800?604801:Math.max(5,n);
 }
+function wait(res:Response){return pollRetrySeconds(res.headers.get("Retry-After"));}
 function headers(c:Context){return {Authorization:"Bearer "+c.token,Accept:"application/json"};}
 async function validateEnvelope(c:Context,payload:unknown){
   check(object(payload)&&Object.keys(payload).length===1&&Array.isArray(payload.documents)&&payload.documents.length===1);
