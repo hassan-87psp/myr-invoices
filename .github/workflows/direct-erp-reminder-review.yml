@@ -1,0 +1,23 @@
+name: Direct ERP offline reminder and selection tests
+on:
+  pull_request:
+    paths:
+      - 'vps/backend/lhdn_direct_expiry_reminder_candidate.py'
+      - 'vps/backend/lhdn_direct_reminder_outbox_candidate.py'
+      - 'vps/backend/lhdn_connection_selection_candidate.py'
+      - '.github/workflows/direct-erp-reminder-review.yml'
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run isolated tests
+        run: |
+          python3 -B vps/backend/lhdn_direct_expiry_reminder_candidate.py
+          python3 -B vps/backend/lhdn_direct_reminder_outbox_candidate.py
+          python3 -B vps/backend/lhdn_connection_selection_candidate.py
