@@ -171,8 +171,14 @@ def company_settings_check():
     html=(ROOT/"index.html").read_text()
     m=json.loads((ROOT/"vps/approved-frontend-releases.json").read_text())
     rel=next(r for r in m["releases"] if r["id"]=="company-settings-guided-v1")
+    # Reconstruct the predecessor for its immutable release-manifest checks.
+    previous=html
+    successor=next(r for r in m["releases"] if r["id"]=="premium-company-settings-v1")
+    for p in reversed(successor["replacements"]):
+        assert previous.count(p["new"])==1
+        previous=previous.replace(p["new"],p["old"],1)
     for p in rel["replacements"]:
-        assert html.count(p["new"])==1
+        assert previous.count(p["new"])==1
     helpers=html[html.index("function myrStMsicOptions("):html.index("function vSettingsContent(){")]
     data=html[html.index("const MYR_OB_MSIC="):html.index("function vOnboarding(){")]
     fixture=r"""
@@ -208,6 +214,39 @@ permitted=false;$('#st-sst-number').value='SST123';await myrStSave(btn);if(saved
         assert marker in profile,marker
     print("MYR_GUIDED_SETTINGS_OK",flush=True)
 
+def premium_settings_check():
+    html=(ROOT/"index.html").read_text()
+    helper=html[html.index("function myrStMsicOptions("):html.index("function vSettingsContent(){")]
+    data=html[html.index("const MYR_OB_MSIC="):html.index("function vOnboarding(){")]
+    fixture=r"""
+const els={};const $=id=>els[id]??={value:'',hidden:false,disabled:false,required:false,innerHTML:'',attrs:{},setAttribute(k,v){this.attrs[k]=v},removeAttribute(k){delete this.attrs[k]},getAttribute(k){return this.attrs[k]},focus(){},reportValidity:()=>true};
+const val=id=>$('#'+id).value.trim(),opt=list=>JSON.stringify(list),TIN_RE=/^C[0-9]{8,12}$/;
+const esc=v=>String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
+let permitted=true;const can=()=>permitted;
+const document={querySelectorAll:()=>pill};
+const pill=['no','yes'].map(v=>({dataset:{stSst:v},attrs:{},setAttribute(k,x){this.attrs[k]=x}}));
+"""
+    tests=r"""
+$('#st-msic').value='62010';$('#st-msicd').value='Saved activity';
+myrStComboSearch('maize');
+if($('#st-msic-results').hidden||!$('#st-msic-results').innerHTML.includes('01111')||$('#st-msic-search').attrs['aria-expanded']!=='true')throw Error('Search results');
+if(val('st-msic')!=='62010'||val('st-msicd')!=='Saved activity')throw Error('Search must not mutate stored selection');
+myrStComboClose();if(!$('#st-msic-results').hidden||val('st-msic-search')!=='62010 — Saved activity')throw Error('Restore selected activity');
+const index=MYR_OB_MSIC.findIndex(r=>r[0]==='01111');myrStComboPick(index);
+if(val('st-msic')!=='01111'||val('st-msicd')!=='Growing of maize'||!$('#st-msic-results').hidden)throw Error('Select official pair');
+myrStComboSearch('nonexistent-z-xyz');if(!$('#st-msic-results').innerHTML.includes('No matching'))throw Error('Empty search');
+myrStSstPill('yes');if(val('st-sst-choice')!=='yes'||$('#st-sst-number').disabled||pill[1].attrs['aria-pressed']!=='true')throw Error('SST yes');
+$('#st-sst-number').value='ABC123';myrStSstPill('no');if(!$('#st-sst-number').disabled||!$('#st-sst-box').hidden||val('st-sst-number')!=='ABC123')throw Error('SST no preserves input');
+permitted=false;myrStComboPick(0);myrStSstPill('yes');if(val('st-msic')!=='01111'||val('st-sst-choice')!=='no')throw Error('Permissions');
+"""
+    run("node","-",input=fixture+data+helper+tests,text=True)
+    profile=html[html.index("function vSettingsContent(){"):html.index("function saveSettings(){")]
+    for marker in ('role="combobox"','aria-controls="st-msic-results"','st-country','st-address-grid','st-danger','Save Changes','myrStHelp','data-st-sst'):
+        assert marker in profile,marker
+    assert 'id="st-msic-select"' not in profile
+    assert 'id="st-email"' not in profile or "field('st-email'" in profile
+    print("MYR_PREMIUM_SETTINGS_OK",flush=True)
+
 def main():
     for p in sorted((ROOT/"vps/backend").rglob("*.py")):
         ast.parse(p.read_text(),filename=str(p))
@@ -222,6 +261,7 @@ def main():
     onboarding_check()
     sidebar_motion_check()
     company_settings_check()
+    premium_settings_check()
     run(sys.executable,"-B",ROOT/"vps/check_legacy_deployment_guard.py")
     run(sys.executable,"-B",ROOT/"vps/check_validation_redaction.py")
     run(sys.executable,"-B",ROOT/"vps/check_security_regression.py")
