@@ -255,7 +255,9 @@ def dual_lhdn_check():
     js=next(ast.literal_eval(n.value) for n in t.body if isinstance(n,ast.Assign)
         and any(isinstance(x,ast.Name) and x.id=="JS" for x in n.targets))
     successor=next(r for r in m["releases"] if r["id"]=="direct-erp-pilot-ui-v1")["replacements"][0]
-    current=js
+    premium=next(r for r in m["releases"] if r["id"]=="premium-lhdn-integrations-v1")["replacements"][0]
+    assert js.count(premium["new"])==1
+    current=js.replace(premium["new"],premium["old"],1)
     assert current.count(successor["new"])==1
     js=current.replace(successor["new"],successor["old"],1)
     assert js.count(patch["new"])==1 and patch["old"] not in js
@@ -325,6 +327,33 @@ if(calls.length!==2)throw Error('Detached panel must not request');
         assert marker in route,marker
     print("MYR_DIRECT_PILOT_UI_AND_ROUTE_GUARDS_OK",flush=True)
 
+def premium_lhdn_check():
+    t=ast.parse((ROOT/"vps/backend/build_lhdn_candidate.py").read_text())
+    js=next(ast.literal_eval(n.value) for n in t.body if isinstance(n,ast.Assign)
+        and any(isinstance(x,ast.Name) and x.id=="JS" for x in n.targets))
+    fixture=r"""
+const co={id:'synthetic-tenant',name:'Synthetic Company',tin:'C1234567890',brn:'202001234567',demo:false};
+const CO=()=>co,ic=()=>'',esc=String,myrAccountHeading=(title,subtitle)=>title+' '+subtitle;
+let allowed=true;const can=()=>allowed;
+const panel={innerHTML:''};
+const cls=()=>({values:new Set(),toggle(k,v){v?this.values.add(k):this.values.delete(k)}});
+const buttons=['easy','direct'].map(mode=>({dataset:{myrLhdnChoice:mode},classList:cls(),card:{classList:cls()},disabled:false,setAttribute(k,v){this[k]=v},closest(){return this.card}}));
+const document={getElementById:id=>id==='myr-lhdn-choice-panel'?panel:null,querySelectorAll:()=>buttons};
+"""
+    tests=r"""
+MYR_CENTRAL_LHDN.intermediary={name:'PRIVATE_PROVIDER_NAME',tin:'PRIVATE_PROVIDER_TIN',brn:'PRIVATE_PROVIDER_BRN'};
+const page=myrCentralCustomer();
+if(!page.includes('mi-shell')||!page.includes('@media(max-width:640px)')||!page.includes('Setup required')||page.includes('PRIVATE_PROVIDER'))throw Error('Compact responsive shell and privacy');
+myrLhdnSelect(buttons[1]);
+if(!buttons[1].card.classList.values.has('mi-selected')||!buttons[1].classList.values.has('p')||buttons[1]['aria-pressed']!=='true'||panel.innerHTML.includes('PRIVATE_PROVIDER')||panel.innerHTML.includes('type="password"'))throw Error('Direct selection and gate');
+myrLhdnSelect(buttons[0]);
+if(buttons[1].card.classList.values.has('mi-selected')||buttons[1]['aria-pressed']!=='false'||!buttons[0].card.classList.values.has('mi-selected')||!panel.innerHTML.includes('PRIVATE_PROVIDER_TIN'))throw Error('Easy selection');
+allowed=false;myrLhdnSelect(buttons[1]);if(!panel.innerHTML.includes('PRIVATE_PROVIDER_TIN'))throw Error('Permission guard');
+if(myrLhdnNotice('Wait','Try again',true).indexOf('myrDirectRefresh()')<0)throw Error('Retry missing');
+"""
+    run("node","-",input=fixture+js+tests,text=True)
+    print("MYR_PREMIUM_LHDN_UI_OK",flush=True)
+
 def main():
     for p in sorted((ROOT/"vps/backend").rglob("*.py")):
         ast.parse(p.read_text(),filename=str(p))
@@ -342,6 +371,7 @@ def main():
     premium_settings_check()
     dual_lhdn_check()
     direct_pilot_ui_check()
+    premium_lhdn_check()
     run(sys.executable,"-B",ROOT/"vps/check_legacy_deployment_guard.py")
     run(sys.executable,"-B",ROOT/"vps/check_validation_redaction.py")
     run(sys.executable,"-B",ROOT/"vps/check_security_regression.py")
