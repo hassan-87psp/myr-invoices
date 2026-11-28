@@ -30,14 +30,16 @@ def total_sen(invoice):
     require(0<=total<=9007199254740991,"Invoice total outside safe range")
     return total
 
-def lock_company(conn,uid,email,cid):
+PAYMENT_ROLES = ("Owner", "Admin", "Accountant")
+
+def lock_company(conn,uid,email,cid,roles=ROLES):
     row=conn.execute("""SELECT c.version,c.data FROM myr_native.companies c
         JOIN myr_native.company_members m ON m.company_id=c.id
         JOIN myr_native.users u ON u.email=m.email
         WHERE c.id=%s AND c.status='active' AND u.id=%s AND u.email=%s
         AND u.email_verified_at IS NOT NULL AND NOT u.is_platform_admin
         AND m.status='active' AND m.role=ANY(%s)
-        FOR UPDATE OF c FOR SHARE OF m,u""",(cid,uid,email,list(ROLES))).fetchone()
+        FOR UPDATE OF c FOR SHARE OF m,u""",(cid,uid,email,list(roles))).fetchone()
     require(row is not None,"Not authorized for this company")
     return row
 
@@ -59,7 +61,7 @@ def add_payment(conn,uid,email,cid,invoice_id,payment):
         raise WriteRejected("Invalid payment date") from None
     method,ref=payment.get("method"),payment.get("ref","")
     require(isinstance(method,str) and 0<len(method)<=100 and isinstance(ref,str) and len(ref)<=300,"Invalid payment details")
-    version,previous=lock_company(conn,uid,email,cid)
+    version,previous=lock_company(conn,uid,email,cid,roles=PAYMENT_ROLES)
     invoices=record_rows(previous,"invoices")
     inv=next((r for r in invoices if r["id"]==invoice_id),None)
     require(inv is not None and inv.get("docType")=="01" and inv.get("appStatus") in ("Draft","Ready"),"Invoice unavailable")
@@ -128,6 +130,8 @@ def test():
         assert delete_record(conn,uid,email,cid,"products",product)["version"]==4
         reject(lambda:delete_record(conn,uid,email,cid,"products",product))
         conn.execute("UPDATE myr_native.company_members SET role='Read-Only' WHERE company_id=%s AND email=%s",(cid,email))
+        reject(lambda:pay({**p,"id":"p3"}))
+        conn.execute("UPDATE myr_native.company_members SET role='Invoice Staff' WHERE company_id=%s AND email=%s",(cid,email))
         reject(lambda:pay({**p,"id":"p3"}))
         assert conn.execute("SELECT count(*) FROM myr_native.audit_logs WHERE company_id=%s",(cid,)).fetchone()[0]==3
     finally:
