@@ -36,7 +36,9 @@ jobs:
           globalThis.fetch = async () => { throw new Error('Real network requests forbidden'); };
           globalThis.Deno = { test: (name, fn) => tests.push([name, fn]) };
           await import('./supabase/functions/myr-lhdn-intermediary/index_test.ts');
-          if (tests.length < 4) throw new Error('Missing LHDN regression tests');
+          await import('./supabase/functions/myr-lhdn-intermediary/sandbox_transport_candidate_test.ts');
+          await import('./supabase/functions/myr-lhdn-intermediary/sandbox_dispatch_bridge_candidate_test.ts');
+          if (tests.length < 13) throw new Error('Missing LHDN regression tests');
           for (const [name, fn] of tests) { await fn(); console.log('PASS', name); }
           console.log('MYR_LHDN_EDGE_MOCKS_OK', tests.length);
           NODE
