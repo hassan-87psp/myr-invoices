@@ -1,4 +1,5 @@
 import {createPollCandidate} from "./sandbox_poll_bridge_candidate.ts";
+import {pollRetrySeconds} from "./sandbox_transport_candidate.ts";
 const secret="b".repeat(64),now=Date.parse("2026-11-28T07:00:00Z"),sub="S".repeat(26),doc="D".repeat(26);
 const grant={tenant_id:"00000000-0000-4000-8000-000000000001",taxpayer:"C1234567890",code_number:"PILOT-1",document_hash:"a".repeat(64),submission_uid:sub,uuid:doc,expires_at:new Date(now+600000).toISOString()};
 function assert(x:unknown):asserts x{if(!x)throw Error("assertion failed")}
@@ -32,4 +33,11 @@ Deno.test("poll refuses wrong secret, disabled gate, other tenant, production an
 });
 Deno.test("wrong issuer cannot return verified status",async()=>{
  const f=fixture();f.row.issuerTin="C9999999999";const r=await f.handler(f.req(f.body));assert(r.status===502&&(await r.json()).state==="poll_unavailable");
+});
+
+Deno.test("provider backoff is never truncated into an early retry",()=>{
+ assert(pollRetrySeconds("7200",now)===7200);
+ assert(pollRetrySeconds("999999999999999999999",now)===604801);
+ assert(pollRetrySeconds("Sat, 28 Nov 2026 09:00:00 GMT",now)===7200);
+ assert(pollRetrySeconds(null,now)===60);
 });
