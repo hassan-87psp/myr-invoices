@@ -80,6 +80,19 @@
           "new": "b.textContent='Verification not released';b.disabled=true;td.append(b);"
         }
       ]
+    },
+    {
+      "id": "invoice-sen-rounding-v1",
+      "replacements": [
+        {
+          "old": "function calc(inv){let sub=0,disc=0,tax=0;const byTax={};const lines=(inv.items||[]).map(it=>{const gross=Math.round((+it.qty||0)*(+it.price||0));const d=Math.min(Math.max(+it.discount||0,0),Math.max(gross,0));const net=gross-d;const t=Math.round(net*(+it.taxRate||0)/100);",
+          "new": "// Positive decimal multiplication rounded half-up to integer sen, matching backend Decimal.\nfunction myrRoundProduct(a,b,divisor=1){\n a=Number(a)||0;b=Number(b)||0;\n if(!Number.isFinite(a)||!Number.isFinite(b)||a<0||b<0)return Math.round(a*b/divisor);\n const parts=n=>{const [base,exp='0']=String(n).toLowerCase().split('e');const [whole,fraction='']=base.split('.');return [BigInt(whole+fraction),fraction.length-Number(exp)]};\n const [x,xs]=parts(a),[y,ys]=parts(b);const scale=xs+ys;\n let numerator=x*y,denominator=BigInt(divisor);\n if(scale>=0)denominator*=10n**BigInt(scale);else numerator*=10n**BigInt(-scale);\n return Number((2n*numerator+denominator)/(2n*denominator));\n}\nfunction calc(inv){let sub=0,disc=0,tax=0;const byTax=Object.create(null);const lines=(inv.items||[]).map(it=>{const gross=myrRoundProduct(it.qty,it.price);const d=Math.min(Math.max(+it.discount||0,0),Math.max(gross,0));const net=gross-d;const t=myrRoundProduct(net,it.taxRate,100);"
+        },
+        {
+          "old": "const fxMissing=docs=>docs.some(i=>String(i.currency||'MYR').toUpperCase()!=='MYR'&&!(Number(i.fxRate)>0));",
+          "new": "const fxMissing=docs=>docs.some(i=>String(i.currency||'MYR').toUpperCase()!=='MYR'&&(!Number.isFinite(Number(i.fxRate))||!(Number(i.fxRate)>0)));"
+        }
+      ]
     }
   ]
 }
