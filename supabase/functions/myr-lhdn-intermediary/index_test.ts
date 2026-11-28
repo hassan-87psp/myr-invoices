@@ -78,3 +78,5 @@ Deno.test("denied taxpayer validation invalidates cached access",async()=>{
  assert((await h(req(body))).status===200);
  assert(logins===2);
 });
+
+import "./sandbox_poll_bridge_candidate_test.ts";
