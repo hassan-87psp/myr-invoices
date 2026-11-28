@@ -30,6 +30,21 @@ def active(unit):
     return subprocess.run(["systemctl","--user","is-active","--quiet",unit]).returncode==0
 def probe(path):
     return out("curl","--noproxy","*","--resolve","myrinvoice.com:443:127.0.0.1","--max-time","10","-sS","-o","/dev/null","-w","%{http_code}","https://myrinvoice.com"+path)
+def direct_probe(path):
+    return out("curl","--noproxy","*","--max-time","5","-sS","-o","/dev/null","-w","%{http_code}","http://127.0.0.1:8768"+path)
+OWNER_PATH="/billing/customer?company_id=00000000-0000-0000-0000-000000000000"
+ADMIN_PATH="/billing/admin/sandbox"
+def verify_billing_routes():
+    # nginx reload is asynchronous; old workers may briefly answer from the prior routing table.
+    # All guards must pass together; never accept a 200/403/404 instead of authentication 401.
+    for attempt in range(12):
+        owner=probe("/api/myr"+OWNER_PATH)
+        admin=probe("/api/myr"+ADMIN_PATH)
+        checkout=probe("/api/myr/billing/admin/sandbox/checkout")
+        print("MYR_BILLING_PROXY_STATUS",owner,admin,checkout,flush=True)
+        if (owner,admin,checkout)==("401","401","404"):return
+        time.sleep(1)
+    raise RuntimeError("Billing proxy guard mismatch: owner="+owner+" admin="+admin+" checkout="+checkout)
 def core_health():
     d=json.loads(out("curl","--noproxy","*","-fsS","--max-time","5","http://127.0.0.1:8767/health"))
     check(d.get("database")=="vps" and d.get("writes_enabled") is True,"Core health failed")
@@ -144,6 +159,10 @@ def main():
                 time.sleep(1)
             else:raise RuntimeError("Billing sidecar health failed")
             print("MYR_BILLING_SIDECAR_HEALTH_OK",flush=True)
+            direct_owner=direct_probe(OWNER_PATH)
+            direct_admin=direct_probe(ADMIN_PATH)
+            print("MYR_BILLING_DIRECT_AUTH_STATUS",direct_owner,direct_admin,flush=True)
+            check(direct_owner=="401" and direct_admin=="401","Direct sidecar authentication guard failed")
             # Build assets with public permissions only; the process umask is otherwise private.
             old_mask=os.umask(0o022)
             try:
@@ -162,9 +181,7 @@ def main():
             run("sudo","nginx","-t")
             run("sudo","systemctl","reload","nginx")
             print("MYR_BILLING_NGINX_RELOADED",flush=True)
-            check(probe("/api/myr/billing/customer?company_id=00000000-0000-0000-0000-000000000000")=="401","Billing owner auth failed")
-            check(probe("/api/myr/billing/admin/sandbox")=="401","Billing admin auth failed")
-            check(probe("/api/myr/billing/admin/sandbox/checkout")=="404","Checkout unexpectedly exposed")
+            verify_billing_routes()
             core_health()
             changed_link=True
             link(release)
