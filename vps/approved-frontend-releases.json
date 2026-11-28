@@ -93,6 +93,27 @@
           "new": "const fxMissing=docs=>docs.some(i=>String(i.currency||'MYR').toUpperCase()!=='MYR'&&(!Number.isFinite(Number(i.fxRate))||!(Number(i.fxRate)>0)));"
         }
       ]
+    },
+    {
+      "id": "mobile-keyboard-suggestions-v1",
+      "replacements": [
+        {
+          "old": "function myrInvSuggest(input,type,i){",
+          "new": "function myrMobileSuggestionGeometry(rect,viewport){\n const left=viewport.left+8,right=viewport.left+viewport.width-8,top=viewport.top+8,bottom=viewport.top+viewport.height-8;\n const width=Math.max(0,Math.min(Math.max(rect.width,250),right-left));\n const x=Math.max(left,Math.min(rect.left,right-width));\n const below=Math.max(0,bottom-Math.max(top,rect.bottom+4)),above=Math.max(0,Math.min(bottom,rect.top-4)-top);\n const up=below<120&&above>below;\n const height=Math.min(240,up?above:below);\n return {left:x,width,top:up?Math.min(bottom,rect.top-4)-height:Math.max(top,rect.bottom+4),height};\n}\nfunction myrPositionMobileSuggestions(){\n if(!MYR_INV_SUG||!matchMedia('(max-width:767px)').matches)return;\n const {input,box}=MYR_INV_SUG;if(!input.isConnected){myrInvHideSuggestions();return}\n const v=window.visualViewport;\n const g=myrMobileSuggestionGeometry(input.getBoundingClientRect(),{left:v?.offsetLeft||0,top:v?.offsetTop||0,width:v?.width||window.innerWidth,height:v?.height||window.innerHeight});\n if(g.height<44||g.width<44){myrInvHideSuggestions();return}\n Object.assign(box.style,{left:g.left+'px',width:g.width+'px',top:g.top+'px',bottom:'auto',maxHeight:g.height+'px'});\n}\nfunction myrInvSuggest(input,type,i){"
+        },
+        {
+          "old": "box.style.maxHeight=Math.min(240,pos.top-8)+'px'}\n}",
+          "new": "box.style.maxHeight=Math.min(240,pos.top-8)+'px'}\n myrPositionMobileSuggestions();\n}"
+        },
+        {
+          "old": "window.addEventListener('resize',myrInvHideSuggestions);",
+          "new": "window.addEventListener('resize',()=>{if(matchMedia('(max-width:767px)').matches)myrPositionMobileSuggestions();else myrInvHideSuggestions()});\nwindow.visualViewport?.addEventListener('resize',myrPositionMobileSuggestions,{passive:true});\nwindow.visualViewport?.addEventListener('scroll',myrPositionMobileSuggestions,{passive:true});"
+        },
+        {
+          "old": "@media(max-width:767px){#bwrap #inv-details .myr-simple-options{grid-template-columns:repeat(2,minmax(0,1fr))}#bwrap .myr-inv-search-field input{font-size:13px}#bwrap .myr-inv-recovery{margin-bottom:3px}}",
+          "new": "@media(max-width:767px){#bwrap #inv-details .myr-simple-options{grid-template-columns:repeat(2,minmax(0,1fr))}#bwrap .myr-inv-search-field input{font-size:13px}#bwrap .myr-inv-recovery{margin-bottom:3px}}\n@media(max-width:767px){.myr-inv-suggestions button{min-height:44px;touch-action:manipulation}.myr-business #bwrap .myr-simple-card input:not([type=checkbox]):focus,.myr-business #bwrap .myr-simple-card select:focus,.myr-business #bwrap textarea:focus{font-size:16px!important}.myr-business #bwrap input,.myr-business #bwrap select,.myr-business #bwrap textarea{scroll-margin-block:90px}.myr-inv-suggestions{overscroll-behavior:contain;touch-action:pan-y}}"
+        }
+      ]
     }
   ]
 }
