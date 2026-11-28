@@ -23,4 +23,6 @@ jobs:
           MYR_SANDBOX_TEST_PYTHON: /usr/bin/python3
         run: bash vps/prepare-lhdn-isolated-sandbox.sh --rehearse
       - name: Offline certificate primitive tests
-        run: /usr/bin/python3 -B vps/backend/lhdn_signing_candidate.py
+        run: |
+          /usr/bin/python3 -B vps/backend/lhdn_signing_candidate.py
+          /usr/bin/python3 -B vps/backend/lhdn_direct_vault_candidate.py
