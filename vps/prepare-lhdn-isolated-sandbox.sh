@@ -67,10 +67,14 @@ if [ "$MODE" = --rehearse ]; then
  before="$("${PSQL[@]}" -d myr_lhdn_sandbox -Atc "SELECT count(*)||':'||count(*) FILTER (WHERE state='valid') FROM myr_native.lhdn_submission_intents")"
  after="$("${PSQL[@]}" -d myr_lhdn_restore_check -Atc "SELECT count(*)||':'||count(*) FILTER (WHERE state='valid') FROM myr_native.lhdn_submission_intents")"
  test "$before" = "$after"
+ "$BIN/pg_ctl" -D "$ROOT/data" -m fast -w stop >/dev/null
+ started=0
  echo "MYR_SANDBOX_SYNTHETIC_RESTORE_OK"
  echo "MYR_SANDBOX_ISOLATED_REHEARSAL_OK"
 else
  # An empty, stopped cluster only. No worker or public API is installed.
  test "$("${PSQL[@]}" -d myr_lhdn_sandbox -Atc 'SELECT count(*) FROM myr_native.companies')" = 0
+ "$BIN/pg_ctl" -D "$ROOT/data" -m fast -w stop >/dev/null
+ started=0
  echo "MYR_EMPTY_SANDBOX_DATABASE_INSTALLED"
 fi
