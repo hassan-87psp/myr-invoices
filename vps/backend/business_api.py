@@ -347,6 +347,63 @@ def lhdn_connection(body:LhdnConnectionBody,request:Request,conn=Depends(db)):
     if not row:raise HTTPException(404,"Company unavailable")
     return central_lhdn.check_connection(body.p_company_id,row[0],row[1])
 
+def direct_pilot_operation(request,body):
+    # Existing native-only session and tenant authorization; never accept a
+    # caller-supplied TIN, owner or credential scope. No secret-bearing logs.
+    import lhdn_direct_pilot_candidate as pilot
+    from lhdn_direct_vault_candidate import Scope
+    if not native_enabled() or not request.cookies.get(native.COOKIE) or request.headers.get("authorization"):
+        raise HTTPException(401,"Native business sign-in required")
+    require_cutover()
+    try:
+        cid=UUID(body.get("p_company_id",""))
+        if str(cid)!=body.get("p_company_id"):raise ValueError()
+    except (ValueError,TypeError,AttributeError):
+        raise HTTPException(422,"Invalid request data") from None
+    with connect() as conn:
+        profile=identity(conn,request)
+        owner_company(conn,profile,cid,lock=True)
+        # Hold current owner and company locks for this bounded pilot operation.
+        row=conn.execute("""SELECT c.tin,c.data->>'brn',c.version
+            FROM myr_native.companies c JOIN myr_native.users u ON u.id=%s
+            WHERE c.id=%s AND c.status='active' AND u.disabled=false
+            AND u.email_verified_at IS NOT NULL AND NOT u.is_platform_admin
+            AND c.data->>'demo' IS DISTINCT FROM 'true'
+            AND c.data->>'vpsSyntheticWriteTest' IS DISTINCT FROM 'true'
+            FOR SHARE OF u""",(profile["id"],cid)).fetchone()
+        if not row:raise HTTPException(404,"Company unavailable")
+        try:
+            scope=Scope(str(cid),row[0],row[1])
+            return pilot.handle(scope,profile["id"],row[2],body)
+        except (ValueError,TypeError,KeyError):
+            raise HTTPException(409,"Connection setup unavailable or changed. Refresh and contact support if needed.") from None
+        except Exception:
+            raise HTTPException(503,"Secure connection temporarily unavailable") from None
+
+@api.post("/lhdn/direct-pilot")
+async def direct_pilot(request:Request):
+    # This candidate is not exposed by the pinned production backend.
+    # No provider request or vault operation before authentication and grant.
+    if request.headers.get("origin")!="https://myrinvoice.com":
+        raise HTTPException(403,"Origin rejected")
+    if request.headers.get("content-type","").split(";")[0].strip().lower()!="application/json":
+        raise HTTPException(415,"JSON request required")
+    if not native_enabled() or not request.cookies.get(native.COOKIE) or request.headers.get("authorization"):
+        raise HTTPException(401,"Native business sign-in required")
+    import json
+    from starlette.concurrency import run_in_threadpool
+    from lhdn_protocol_candidate import _unique_object
+    try:
+        raw=bytearray()
+        async for part in request.stream():
+            if len(raw)+len(part)>4096:raise ValueError()
+            raw.extend(part)
+        body=json.loads(raw,object_pairs_hook=_unique_object)
+        if not isinstance(body,dict):raise ValueError()
+    except (ValueError,TypeError):
+        raise HTTPException(422,"Invalid request data") from None
+    return await run_in_threadpool(direct_pilot_operation,request,body)
+
 class AdminCompanyBody(BaseModel):
     p_company_id:UUID
     p_version:int
