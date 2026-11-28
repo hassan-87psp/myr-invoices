@@ -126,10 +126,53 @@ class Vault:
             record={"revision":expected+1,"state":"disconnected","updated":now.isoformat()}
             self._write(fd,name,scope,record)
             return self._status(record,now)
+    def probe_staged(self,scope,expected,now,approve,probe):
+        """Staged operator orchestration, not a public route.
+        A caller supplies an authorization check and a bounded provider adapter.
+        A persisted claim precedes any network attempt. An interrupted check
+        requires operator review, never an automatic retry. No tokens returned.
+        """
+        now=utc(now)
+        require(callable(approve) and callable(probe),"Explicit operator approval and adapter required")
+        require(approve(scope) is True,"Pilot approval required")
+        with self._locked(scope) as (fd,name):
+            old=self._read(fd,name,scope);self._revision(old,expected)
+            require(old is not None and old["state"]=="pending_identity_review","Pending credential record required")
+            require(self._status(old,now)["status"]!="expired","Credentials expired")
+            require(not old.get("probe_claim"),"Previous check needs operator review")
+            require(not old.get("probe_blocked"),"Previous check needs operator review")
+            require(now.timestamp()>=old.get("probe_after",0),"Provider backoff active")
+            if not approve(scope):raise ValueError("Pilot approval required")
+            # Store a durable claim before releasing the lock or calling the provider.
+            claimed={**old,"revision":expected+1,"probe_claim":True,"updated":now.isoformat()}
+            self._write(fd,name,scope,claimed)
+        try:
+            result=probe(scope,claimed["client_id"],claimed["client_secret"])
+            require(isinstance(result,dict) and set(result).issuperset({"environment","mode","login_status","tin_brn_lookup_verified","issuer_binding_verified","submission_enabled"}),"Invalid verification")
+            require(result["environment"]=="sandbox" and result["mode"]=="direct_erp" and result["issuer_binding_verified"] is False and result["submission_enabled"] is False,"Unexpected verification capability")
+            login=result["login_status"]
+            require(login in ("login_verified","cached_login","credentials_rejected","rate_limited","provider_unavailable","invalid_provider_response"),"Unexpected verification result")
+            matched=result["tin_brn_lookup_verified"] is True and login in ("login_verified","cached_login")
+            # The adapter must provide a durable retry deadline for throttled calls.
+            # If it cannot, require operator review rather than retry prematurely.
+            limited=login=="rate_limited" or result.get("lookup_status")=="rate_limited"
+        except Exception:
+            login="provider_unavailable";matched=False;limited=True
+        with self._locked(scope) as (fd,name):
+            current=self._read(fd,name,scope)
+            self._revision(current,expected+1)
+            require(current.get("probe_claim") is True,"Verification claim changed")
+            require(approve(scope) is True,"Pilot approval changed")
+            # A successful login and public lookup do NOT establish issuer ownership.
+            record={**current,"revision":expected+2,"probe_claim":False,"probe_blocked":limited,
+                    "probe_after":now.timestamp()+60,"last_login_status":login,
+                    "tin_brn_lookup_verified":matched,"updated":now.isoformat()}
+            self._write(fd,name,scope,record)
+            return self._status(record,now)
     def _status(self,record,now):
         out={"environment":"sandbox","mode":"direct_erp","revision":0,"status":"not_configured","expiry":None,"days_remaining":None,"reminder_stage":None,"issuer_binding_verified":False,"submission_enabled":False}
         if record is None:return out
-        out.update(revision=record["revision"],status=record["state"])
+        out.update(revision=record["revision"],status=record["state"],last_login_status=record.get("last_login_status"),tin_brn_lookup_verified=record.get("tin_brn_lookup_verified") is True,verification_review_required=bool(record.get("probe_claim") or record.get("probe_blocked")))
         if record["state"]=="disconnected":return out
         expiry=date_value(record["expiry"])
         local=utc(now).astimezone(dt.timezone(dt.timedelta(hours=8))).date()
@@ -207,6 +250,41 @@ class VaultTests(unittest.TestCase):
         self.assertEqual(Vault.from_private_key(self.root,self.root).status(self.s,self.now)["revision"],1)
         k.chmod(0o644)
         with self.assertRaises(ValueError):Vault.from_private_key(self.root,self.root)
+    def test_probe_is_pending_only(self):
+        self.store()
+        calls=[]
+        def check(scope,i,s):
+            calls.append((scope.tenant,i,s))
+            self.assertTrue(self.v.status(scope,self.now)["verification_review_required"])
+            return {"environment":"sandbox","mode":"direct_erp","login_status":"login_verified","tin_brn_lookup_verified":True,"issuer_binding_verified":False,"submission_enabled":False}
+        with self.assertRaises(ValueError):self.v.probe_staged(self.s,1,self.now,lambda s:False,check)
+        self.assertEqual(calls,[])
+        result=self.v.probe_staged(self.s,1,self.now,lambda s:True,check)
+        self.assertEqual(len(calls),1)
+        self.assertEqual(result["revision"],3)
+        self.assertTrue(result["tin_brn_lookup_verified"])
+        self.assertFalse(result["issuer_binding_verified"])
+        self.assertFalse(result["submission_enabled"])
+        self.assertEqual(result["status"],"pending_identity_review")
+        self.assertNotIn("synthetic-secret",str(result))
+        with self.assertRaises(ValueError):self.v.probe_staged(self.s,3,self.now,lambda s:True,check)
+    def test_probe_failure_blocks(self):
+        self.store()
+        def fail(*args):raise RuntimeError("synthetic private value")
+        result=self.v.probe_staged(self.s,1,self.now,lambda s:True,fail)
+        self.assertTrue(result["verification_review_required"])
+        self.assertNotIn("synthetic private value",str(result))
+        with self.assertRaises(ValueError):self.v.probe_staged(self.s,3,self.now+dt.timedelta(days=1),lambda s:True,fail)
+    def test_revocation_during_probe(self):
+        self.store()
+        active=[True]
+        def check(*args):
+            active[0]=False
+            return {"environment":"sandbox","mode":"direct_erp","login_status":"login_verified","tin_brn_lookup_verified":True,"issuer_binding_verified":False,"submission_enabled":False}
+        with self.assertRaises(ValueError):self.v.probe_staged(self.s,1,self.now,lambda s:active[0],check)
+        result=self.v.status(self.s,self.now)
+        self.assertTrue(result["verification_review_required"])
+        self.assertFalse(result["issuer_binding_verified"])
     def test_sandbox_only(self):
         with self.assertRaises(ValueError):Scope(self.s.tenant,self.s.tin,self.s.brn,"production")
 if __name__=="__main__":unittest.main()
