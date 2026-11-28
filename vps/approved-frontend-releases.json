@@ -21,6 +21,15 @@
           "new": "$('#app').innerHTML=html;document.documentElement.classList.remove('myr-starting','myr-start-delayed');"
         }
       ]
+    },
+    {
+      "id": "parallel-startup-assets-v1",
+      "replacements": [
+        {
+          "old": "<link rel=\"manifest\" href=\"./manifest.webmanifest\">",
+          "new": "<link rel=\"preload\" as=\"script\" href=\"./config.js\">\n<link rel=\"preload\" as=\"script\" href=\"./concurrency.js\">\n<link rel=\"manifest\" href=\"./manifest.webmanifest\">"
+        }
+      ]
     }
   ]
 }
