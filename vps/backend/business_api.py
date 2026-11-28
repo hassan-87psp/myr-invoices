@@ -376,9 +376,10 @@ class LinkSubmitBody(LinkReadBody):
     p_payload:dict
 
 @api.post("/links/read")
-def public_link_read(body:LinkReadBody,conn=Depends(db)):
-    # This anonymous capability endpoint is not released to the public.
+def public_link_read(body:LinkReadBody,request:Request,conn=Depends(db)):
+    # Limit anonymous capability lookups before any record access.
     require_cutover()
+    native.guard(request,"public-link-read")
     conn.execute("SET TRANSACTION READ ONLY")
     try:
         return read_link(conn,body.p_token)
@@ -386,8 +387,9 @@ def public_link_read(body:LinkReadBody,conn=Depends(db)):
         raise HTTPException(404,"Link unavailable") from None
 
 @api.post("/links/submit")
-def public_link_submit(body:LinkSubmitBody,conn=Depends(db)):
+def public_link_submit(body:LinkSubmitBody,request:Request,conn=Depends(db)):
     require_cutover()
+    native.guard(request,"public-link-submit")
     return run_write(conn,lambda:submit_link(conn,body.p_token,body.p_payload))
 
 def test():
