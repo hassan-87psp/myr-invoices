@@ -7,11 +7,18 @@ cd "$(dirname "$0")/.."
 test "$(id -un)" = myradmin
 "$HOME/myr-venv/bin/python" -B vps/backend/native_backup.py
 folder="$HOME/myr-private-backups/native"
-cd "$folder"
-latest="$(find . -maxdepth 1 -type f -name 'native-*.dump.gpg' -printf '%f\n' | sort | tail -n1)"
-test -n "$latest"
-sha256sum "$latest" > "$latest.sha256"
-sha256sum -c "$latest.sha256"
+# Verify the original backup checksum; never bless changed bytes by rewriting it.
+latest="$("$HOME/myr-venv/bin/python" -B - "$folder" <<'PY'
+import sys,time
+from pathlib import Path
+sys.path.insert(0,str(Path.cwd()/"vps/backend"))
+from check_private_reliability import inspect_backups
+result=inspect_backups(Path(sys.argv[1]),time.time(),include_name=True)
+if result["status"]!="verified_checksum":
+    raise SystemExit("Offsite export refused: "+result["status"])
+print(result["archive_name"])
+PY
+)"
 echo "VPS_OFFSITE_EXPORT_PREPARED"
 echo "Encrypted archive: $folder/$latest"
 echo "Checksum: $folder/$latest.sha256"
