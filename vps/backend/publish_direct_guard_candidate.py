@@ -3,7 +3,7 @@ No schema, production core, frontend, billing, auth marker or secret changes.
 Rollback restores the exact nginx file and removes only the newly created service.
 An interrupted release leaves a private recovery record and refuses another run.
 """
-import fcntl, hashlib, json, os, shutil, socket, subprocess, sys, time
+import fcntl, hashlib, json, os, socket, subprocess, sys, time
 from pathlib import Path
 
 H=Path.home()
@@ -143,7 +143,7 @@ def main():
             print("Guard only: credential entry, provider calls and submission remain disabled.",flush=True)
         except BaseException:
             if changed_nginx:
-                check(out("sudo","cat",CONF)==changed,"Nginx changed concurrently; manual recovery required")
+                check(out("sudo","cat",CONF) in (original,changed),"Nginx changed concurrently; manual recovery required")
                 run("sudo","install","-m","0644",STATE/"nginx.original",CONF)
                 run("sudo","nginx","-t")
                 run("sudo","systemctl","reload","nginx")
