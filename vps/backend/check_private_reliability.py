@@ -13,7 +13,7 @@ def read_private(path,maxbytes):
         data=f.read(maxbytes+1)
         if len(data)>maxbytes:raise ValueError("oversized file")
         return data
-def inspect_backups(folder,now):
+def inspect_backups(folder,now,*,include_name=False):
     if folder.is_symlink() or not folder.is_dir() or folder.stat().st_uid!=os.getuid() or folder.stat().st_mode&0o077:
         return {"status":"unsafe_directory"}
     names=sorted(p for p in folder.iterdir() if re.fullmatch(r"native-\d{8}T\d{12}Z\.dump\.gpg",p.name))
@@ -31,7 +31,10 @@ def inspect_backups(folder,now):
             if (st.st_size,st.st_mtime_ns)!=(after.st_size,after.st_mtime_ns):raise ValueError("archive changed")
         if actual!=expected[0]:return {"status":"checksum_mismatch"}
         age=now-st.st_mtime
-        return {"status":"verified_checksum" if 0<=age<=MAX_AGE else "stale_or_future","age_hours":round(age/3600,1)}
+        result={"status":"verified_checksum" if 0<=age<=MAX_AGE else "stale_or_future","age_hours":round(age/3600,1)}
+        if include_name and result["status"]=="verified_checksum":
+            result["archive_name"]=path.name
+        return result
     except (OSError,ValueError,UnicodeError):return {"status":"unverified"}
 def unit(name):
     try:return subprocess.run(["systemctl","--user","is-active","--quiet",name],timeout=5,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0
@@ -52,6 +55,14 @@ def selftest():
         c=p.with_name(p.name+".sha256")
         c.write_text(hashlib.sha256(p.read_bytes()).hexdigest()+"  "+p.name+"\n");c.chmod(0o600)
         assert inspect_backups(root,time.time())["status"]=="verified_checksum"
+        assert "archive_name" not in inspect_backups(root,time.time())
+        assert inspect_backups(root,time.time(),include_name=True)["archive_name"]==p.name
+        original_checksum=c.read_bytes()
+        p.write_bytes(b"corrupted")
+        result=inspect_backups(root,time.time(),include_name=True)
+        assert result["status"]=="checksum_mismatch" and "archive_name" not in result
+        assert c.read_bytes()==original_checksum
+        p.write_bytes(b"synthetic archive bytes")
         assert inspect_backups(root,time.time()+MAX_AGE+60)["status"]=="stale_or_future"
         p.write_bytes(b"corrupted")
         assert inspect_backups(root,time.time())["status"]=="checksum_mismatch"
