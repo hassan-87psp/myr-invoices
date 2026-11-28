@@ -34,7 +34,7 @@ def main():
     manifest_check()
     run("node",ROOT/"vps/check_account_link_scope.mjs")
     # Explicit offline-only tests. No dynamic discovery or database-dependent test execution.
-    for name in ("chip_subscription_policy_candidate.py","chip_billing_view_candidate.py",
+    for name in ("chip_subscription_policy_candidate.py","chip_billing_view_candidate.py","chip_revenue_report_candidate.py",
                  "lhdn_protocol_candidate.py","lhdn_ubl_candidate.py","lhdn_saved_invoice_candidate.py",
                  "lhdn_lifecycle_candidate.py","lhdn_readiness_candidate.py"):
         run(sys.executable,"-B",ROOT/"vps/backend"/name)
