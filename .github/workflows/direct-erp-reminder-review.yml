@@ -5,6 +5,8 @@ on:
       - 'vps/backend/lhdn_direct_expiry_reminder_candidate.py'
       - 'vps/backend/lhdn_direct_reminder_outbox_candidate.py'
       - 'vps/backend/lhdn_connection_selection_candidate.py'
+      - 'vps/backend/lhdn_direct_reminder_job_candidate.py'
+      - 'supabase/functions/myr-transactional-mail/**'
       - '.github/workflows/direct-erp-reminder-review.yml'
 permissions:
   contents: read
@@ -21,3 +23,9 @@ jobs:
           python3 -B vps/backend/lhdn_direct_expiry_reminder_candidate.py
           python3 -B vps/backend/lhdn_direct_reminder_outbox_candidate.py
           python3 -B vps/backend/lhdn_connection_selection_candidate.py
+          python3 -B vps/backend/lhdn_direct_reminder_job_candidate.py
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check mail gateway without sending
+        run: deno check supabase/functions/myr-transactional-mail/index.ts
