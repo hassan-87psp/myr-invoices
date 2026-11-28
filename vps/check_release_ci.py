@@ -247,6 +247,37 @@ permitted=false;myrStComboPick(0);myrStSstPill('yes');if(val('st-msic')!=='01111
     assert 'id="st-email"' not in profile or "field('st-email'" in profile
     print("MYR_PREMIUM_SETTINGS_OK",flush=True)
 
+def dual_lhdn_check():
+    m=json.loads((ROOT/"vps/approved-frontend-releases.json").read_text())
+    rel=next(r for r in m["releases"] if r["id"]=="dual-lhdn-connect-v1")
+    patch=rel["replacements"][0]
+    t=ast.parse((ROOT/"vps/backend/build_lhdn_candidate.py").read_text())
+    js=next(ast.literal_eval(n.value) for n in t.body if isinstance(n,ast.Assign)
+        and any(isinstance(x,ast.Name) and x.id=="JS" for x in n.targets))
+    assert js.count(patch["new"])==1 and patch["old"] not in js
+    fixture=r"""
+const co={id:'synthetic-tenant',name:'Synthetic Company',tin:'C1234567890',brn:'202001234567',demo:false};
+const CO=()=>co,ic=()=>'',esc=String,myrAccountHeading=(title,subtitle)=>title+' '+subtitle;
+let allowed=true;const can=()=>allowed;
+const panel={innerHTML:''};
+const buttons=['easy','direct'].map(mode=>({dataset:{myrLhdnChoice:mode},disabled:false,setAttribute(k,v){this[k]=v}}));
+const document={getElementById:()=>panel,querySelectorAll:()=>buttons};
+"""
+    tests=r"""
+MYR_CENTRAL_LHDN.intermediary={name:'PRIVATE_PROVIDER_NAME',tin:'PRIVATE_PROVIDER_TIN',brn:'PRIVATE_PROVIDER_BRN'};
+const page=myrCentralCustomer();
+if(!page.includes('Easy Connect')||!page.includes('Direct Connect')||page.includes('PRIVATE_PROVIDER'))throw Error('Dual choice or privacy');
+myrLhdnSelect(buttons[1]);
+if(!panel.innerHTML.includes('Credential entry is not enabled yet')||panel.innerHTML.includes('PRIVATE_PROVIDER')||panel.innerHTML.includes('type="password"'))throw Error('Direct form must fail closed');
+myrLhdnSelect(buttons[0]);
+if(!panel.innerHTML.includes('PRIVATE_PROVIDER_TIN')||!panel.innerHTML.includes('Test connection')||buttons[0]['aria-pressed']!=='true')throw Error('Existing intermediary flow');
+allowed=false;
+myrLhdnSelect(buttons[1]);
+if(!panel.innerHTML.includes('PRIVATE_PROVIDER_TIN'))throw Error('Permission guard');
+"""
+    run("node","-",input=fixture+js+tests,text=True)
+    print("MYR_DUAL_LHDN_UI_OK",flush=True)
+
 def main():
     for p in sorted((ROOT/"vps/backend").rglob("*.py")):
         ast.parse(p.read_text(),filename=str(p))
@@ -262,6 +293,7 @@ def main():
     sidebar_motion_check()
     company_settings_check()
     premium_settings_check()
+    dual_lhdn_check()
     run(sys.executable,"-B",ROOT/"vps/check_legacy_deployment_guard.py")
     run(sys.executable,"-B",ROOT/"vps/check_validation_redaction.py")
     run(sys.executable,"-B",ROOT/"vps/check_security_regression.py")
@@ -274,7 +306,7 @@ def main():
     # Explicit offline-only tests. No dynamic discovery or database-dependent test execution.
     for name in ("chip_subscription_policy_candidate.py","chip_billing_view_candidate.py","chip_revenue_report_candidate.py",
                  "lhdn_protocol_candidate.py","lhdn_ubl_candidate.py","lhdn_saved_invoice_candidate.py",
-                 "lhdn_lifecycle_candidate.py","lhdn_readiness_candidate.py","lhdn_sandbox_poll_candidate.py"):
+                 "lhdn_lifecycle_candidate.py","lhdn_readiness_candidate.py","lhdn_sandbox_poll_candidate.py","lhdn_direct_candidate.py"):
         run(sys.executable,"-B",ROOT/"vps/backend"/name)
     print("MYR_OFFLINE_RELEASE_GATE_OK",flush=True)
 if __name__=="__main__":main()
