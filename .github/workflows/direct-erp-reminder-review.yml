@@ -9,6 +9,7 @@ on:
       - 'vps/backend/lhdn_direct_reminder_runtime_candidate.py'
       - 'vps/backend/lhdn_receipt_display_candidate.py'
       - 'supabase/functions/myr-transactional-mail/**'
+      - 'vps/stage-direct-reminder-scheduler.sh'
       - '.github/workflows/direct-erp-reminder-review.yml'
 permissions:
   contents: read
@@ -28,6 +29,7 @@ jobs:
           python3 -B vps/backend/lhdn_direct_reminder_job_candidate.py
           python3 -B vps/backend/lhdn_direct_reminder_runtime_candidate.py --test
           python3 -B vps/backend/lhdn_receipt_display_candidate.py
+          bash -n vps/stage-direct-reminder-scheduler.sh
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
