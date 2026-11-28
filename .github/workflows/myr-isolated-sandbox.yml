@@ -26,3 +26,4 @@ jobs:
         run: |
           /usr/bin/python3 -B vps/backend/lhdn_signing_candidate.py
           /usr/bin/python3 -B vps/backend/lhdn_direct_vault_candidate.py
+          /usr/bin/python3 -B vps/backend/lhdn_direct_pilot_candidate.py

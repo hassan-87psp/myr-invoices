@@ -19,5 +19,6 @@ if ! "$PY" -B -c 'import cryptography; from cryptography import x509; assert has
 fi
 env -u MYR_PRODUCTION_RELEASE "$PY" -B vps/backend/lhdn_signing_candidate.py
 env -u MYR_PRODUCTION_RELEASE "$PY" -B vps/backend/lhdn_direct_vault_candidate.py
+env -u MYR_PRODUCTION_RELEASE "$PY" -B vps/backend/lhdn_direct_pilot_candidate.py
 echo "MYR_LHDN_OFFLINE_SUITE_OK"
 echo "Mock/offline only; DB rehearsal, official authorization, signature interoperability and provider acceptance are not verified."

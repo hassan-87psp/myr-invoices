@@ -22,11 +22,61 @@ function myrCentralCustomer(){
 }
 function myrLhdnDirectContent(){
  const co=CO();
- return '<section class="card pad"><div class="row sb" style="flex-wrap:wrap;gap:8px"><h3>'+ic('key',18)+' Direct Connect · ERP</h3><span class="badge b-warn">Pilot preparation</span></div>'+
+ return '<section class="card pad"><div class="row sb" style="flex-wrap:wrap;gap:8px"><h3>'+ic('key',18)+' Direct Connect · ERP</h3><span class="badge b-warn">Sandbox only</span></div>'+
  '<dl class="kv mt8"><dt>Company</dt><dd>'+esc(co.name||'—')+'</dd><dt>TIN</dt><dd>'+esc(co.tin||'—')+'</dd><dt>BRN</dt><dd>'+esc(co.brn||'—')+'</dd></dl>'+
- '<h3 class="mt">1. Register your ERP</h3><p class="muted sm mt8">Open MyInvois using your own company profile, go to ERP registration and generate the Client ID and Client Secret. Sandbox and production credentials are different.</p><a class="btn sm mt8" href="https://preprod.myinvois.hasil.gov.my/" target="_blank" rel="noopener noreferrer">Open Sandbox Portal ↗</a>'+
- '<h3 class="mt">2. Secure connection</h3><p class="note w mt8">Credential entry is not enabled yet. Do not send your API secrets by chat or email. The secure connection form will become available only after the server-side pilot is released.</p>'+
- '<h3 class="mt">3. Automatic processing</h3><p class="muted sm mt8">After a verified connection, MYR Invoice will manage token renewal, document submission and status updates when those features are released. No connection has been verified and no invoice will be submitted from this screen.</p></section>';
+ '<h3 class="mt">1. Register your ERP</h3><p class="muted sm mt8">Open MyInvois with your own company profile, register your ERP and generate a Sandbox Client ID and Client Secret. Keep production credentials separate.</p><a class="btn sm mt8" href="https://preprod.myinvois.hasil.gov.my/" target="_blank" rel="noopener noreferrer">Open Sandbox Portal ↗</a>'+
+ '<h3 class="mt">2. Secure connection</h3><div id="myr-direct-pilot" aria-live="polite"><p class="note w mt8">Credential entry is not enabled yet. Checking availability. Do not send API secrets by chat or email.</p></div>'+
+ '<h3 class="mt">3. Verification</h3><p class="muted sm mt8">The system checks login and TIN/BRN after saving. Issuer identity review and invoice submission are separate release stages. No invoice will be submitted from this screen.</p></section>';
+}
+function myrDirectView(el,result){
+ if(!el||!el.isConnected)return;
+ if(result?.available!==true||result.environment!=='sandbox'||result.mode!=='direct_erp'||result.issuer_binding_verified!==false||result.submission_enabled!==false||!Number.isSafeInteger(result.revision)||result.revision<0){
+  el.innerHTML='<p class="note w mt8">Secure credential entry is unavailable. An approved Sandbox company owner is required. Do not send API secrets by chat or email.</p>';return;
+ }
+ const labels={not_configured:'Not connected',pending_identity_review:'Identity review pending',expired:'Credentials expired',disconnected:'Disconnected'};
+ if(!Object.hasOwn(labels,result.status)){el.textContent='Connection status unavailable.';return;}
+ const loginLabels={login_verified:'Login verified',cached_login:'Previous login verified',credentials_rejected:'Credentials rejected',rate_limited:'Rate limited',provider_unavailable:'Provider unavailable',invalid_provider_response:'Invalid provider response'};
+ const expires=typeof result.expiry==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(result.expiry)?result.expiry:null;
+ el.innerHTML='<div class="note mt8"><strong>'+labels[result.status]+'</strong><dl class="kv mt8"><dt>Authentication</dt><dd>'+(Object.hasOwn(loginLabels,result.last_login_status)?loginLabels[result.last_login_status]:'Not verified')+'</dd><dt>TIN/BRN lookup</dt><dd>'+(result.tin_brn_lookup_verified===true?'Matched':'Not verified')+'</dd><dt>Issuer identity</dt><dd>Pending independent verification</dd><dt>Submission</dt><dd>Disabled</dd>'+(expires?'<dt>Secret expiry (owner supplied)</dt><dd>'+esc(expires)+'</dd>':'')+'</dl></div>'+
+ (result.verification_review_required===true?'<p class="note w mt8">Verification paused for operator review. Do not retry or replace credentials to bypass a provider wait.</p>':'')+
+ (result.verification_deferred===true?'<p class="muted sm mt8">Verification deferred. Refresh status before retrying.</p>':'')+
+ '<form id="myr-direct-credentials" method="post" action="/api/myr/lhdn/direct-pilot" autocomplete="off" onsubmit="event.preventDefault();myrDirectAction(this,\'save\')" class="mt"><input type="hidden" name="revision" value="'+result.revision+'"><label class="sm">Sandbox Client ID<input class="inp" name="client_id" type="password" autocomplete="new-password" required maxlength="512"></label><label class="sm">Sandbox Client Secret<input class="inp" name="client_secret" type="password" autocomplete="new-password" required maxlength="1024"></label><label class="sm">Secret expiry date (from your portal)<input class="inp" name="expiry" type="date" required></label><label class="sm mt8"><input type="checkbox" name="consent" required> I own or am authorized to manage this company and consent to encrypted storage and a Sandbox connection check.</label><div class="row mt8" style="flex-wrap:wrap;gap:8px"><button class="btn p" type="submit" '+(result.verification_review_required?'disabled':'')+'>Save &amp; verify</button>'+
+ (result.status==='pending_identity_review'?'<button class="btn" type="button" '+(result.verification_review_required?'disabled':'')+' onclick="myrDirectAction(this.form,\'verify\')">Verify again</button>':'')+
+ (result.revision>0&&result.status!=='disconnected'?'<button class="btn" type="button" onclick="myrDirectAction(this.form,\'disconnect\')">Disconnect</button>':'')+
+ '<button class="btn" type="button" onclick="myrDirectRefresh()">Refresh status</button></div></form><p class="muted sm mt8">Disconnect removes the active saved credentials from MYR Invoice, not the ERP registration in MyInvois.</p>';
+}
+async function myrDirectRequest(action,extra,el,co){
+ if(!co||!el||!el.isConnected||!can('Manage Settings')||co.demo||!Number.isSafeInteger(co._v))return;
+ const cid=co.id,version=co._v;
+ const current=()=>el.isConnected&&document.getElementById('myr-direct-pilot')===el&&CO()?.id===cid&&CO()?._v===version;
+ try{
+  const session=(await SB.auth.getSession()).data.session;
+  if(!session?.native||!current())throw Error('Native business sign-in required');
+  const response=await fetch('/api/myr/lhdn/direct-pilot',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',cache:'no-store',body:JSON.stringify({action,p_company_id:cid,p_version:version,...extra})});
+  if(!response.ok)throw Error('Connection unavailable');
+  const result=await response.json();
+  if(current())myrDirectView(el,result);
+ }catch(e){if(current())el.innerHTML='<p class="note w mt8">Secure connection unavailable. No connection has been confirmed. Refresh this page or contact support.</p>';}
+ finally{if(extra){delete extra.client_id;delete extra.client_secret;}}
+}
+function myrDirectRefresh(){
+ const el=document.getElementById('myr-direct-pilot'),co=CO();
+ if(el)myrDirectRequest('status',{},el,co);
+}
+function myrDirectAction(form,action){
+ const el=document.getElementById('myr-direct-pilot'),co=CO();
+ if(!co||!el||!form||!el.contains(form)||!form.isConnected||!can('Manage Settings')||co.demo)return;
+ const revision=Number(form.elements.revision.value),extra={revision};
+ if(!Number.isSafeInteger(revision)||revision<0)return;
+ if(action==='save'){
+  if(!form.reportValidity()||!form.elements.consent.checked)return;
+  Object.assign(extra,{client_id:form.elements.client_id.value,client_secret:form.elements.client_secret.value,expiry:form.elements.expiry.value,consent:true});
+ }else if(action==='disconnect'){if(!confirm('Disconnect this Sandbox ERP? You can reconnect later.'))return;}
+ else if(action!=='verify')return;
+ // Never persist or log secrets in browser storage / company snapshots.
+ form.elements.client_id.value='';form.elements.client_secret.value='';
+ el.innerHTML='<p class="muted sm mt8" role="status">Checking secure connection…</p>';
+ myrDirectRequest(action,extra,el,co);
 }
 function myrLhdnSelect(btn){
  const co=CO(),panel=document.getElementById('myr-lhdn-choice-panel');
@@ -34,6 +84,7 @@ function myrLhdnSelect(btn){
  const mode=btn.dataset.myrLhdnChoice;if(mode!=='easy'&&mode!=='direct')return;
  for(const el of document.querySelectorAll('[data-myr-lhdn-choice]'))el.setAttribute('aria-pressed',el===btn?'true':'false');
  panel.innerHTML=mode==='easy'?myrLhdnEasyContent():myrLhdnDirectContent();
+ if(mode==='direct')myrDirectRefresh();
 }
 function myrLhdnEasyContent(){
  const co=CO(),party=MYR_CENTRAL_LHDN.intermediary,ready=!!(co.tin&&co.brn);
