@@ -15,6 +15,16 @@ async function authorized(expected: string, provided: string) {
   const signature = await crypto.subtle.sign("HMAC", key, message);
   return crypto.subtle.verify("HMAC", other, signature, message);
 }
+// Honor both delta-seconds and HTTP-date Retry-After; never shorten an explicit wait.
+export function retryDeadline(header:string|null, now:number):number {
+  if(header && /^\d+$/.test(header)) {
+    const seconds=Number(header);
+    if(!Number.isFinite(seconds) || seconds>Number.MAX_SAFE_INTEGER/1000) return Number.POSITIVE_INFINITY;
+    return now+Math.max(60000,seconds*1000);
+  }
+  const date=header?Date.parse(header):NaN;
+  return Math.max(now+60000,Number.isFinite(date)?date:now+60000);
+}
 export function createHandler(env: (name:string)=>string|undefined, send: typeof fetch = fetch) {
   // Isolate-local only. A distributed limiter/cache is required before public rollout.
   const cache = new Map<string,Entry>();
@@ -44,12 +54,15 @@ export function createHandler(env: (name:string)=>string|undefined, send: typeof
         validated.set(key,Math.min(entry.expires,now+300000));
         return json(200,{ok:true,verification:"provider_tin",submission_enabled:false});
       }
-      if(response.status===401){cache.delete(key.split(":")[0]);return json(401,{ok:false,code:"authentication_required"});}
+      if(response.status===401||response.status===403){
+        const tokenKey=key.split(":")[0];
+        // Avoid a stale in-flight request removing a freshly obtained token.
+        if(cache.get(tokenKey)===entry)cache.delete(tokenKey);
+        for(const k of validated.keys())if(k.startsWith(tokenKey+":"))validated.delete(k);
+        return json(response.status,{ok:false,code:response.status===401?"authentication_required":"permission_denied"});
+      }
       if(response.status===429){
-        const header=response.headers.get("Retry-After");
-        const seconds=header&&/^\d+$/.test(header)?Number(header):NaN;
-        const until=header?Date.parse(header):NaN;
-        validationBackoff=now+Math.max(60000,Number.isFinite(seconds)?seconds*1000:Number.isFinite(until)?until-now:60000);
+        validationBackoff=Math.max(validationBackoff,retryDeadline(response.headers.get("Retry-After"),Date.now()));
         return json(429,{ok:false,code:"rate_limited"});
       }
       const code=({400:"invalid_input",403:"permission_denied",404:"identity_not_matched"} as Record<number,string>)[response.status];
@@ -72,8 +85,7 @@ export function createHandler(env: (name:string)=>string|undefined, send: typeof
     if (!res.ok) {
       await res.body?.cancel();
       if (res.status===429) {
-        const retry=Number(res.headers.get("Retry-After"));
-        backoff.set(environment,now+Math.max(60000,Math.min(3600000,Number.isFinite(retry)?retry*1000:60000)));
+        backoff.set(environment,Math.max(backoff.get(environment)||0,retryDeadline(res.headers.get("Retry-After"),Date.now())));
         throw new Error("rate_limited");
       }
       if (res.status===400 || res.status===401 || res.status===403) throw new Error("authorization_or_credentials_rejected");
