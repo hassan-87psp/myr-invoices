@@ -6,6 +6,8 @@ on:
       - 'vps/backend/lhdn_direct_reminder_outbox_candidate.py'
       - 'vps/backend/lhdn_connection_selection_candidate.py'
       - 'vps/backend/lhdn_direct_reminder_job_candidate.py'
+      - 'vps/backend/lhdn_direct_reminder_runtime_candidate.py'
+      - 'vps/backend/lhdn_receipt_display_candidate.py'
       - 'supabase/functions/myr-transactional-mail/**'
       - '.github/workflows/direct-erp-reminder-review.yml'
 permissions:
@@ -24,6 +26,8 @@ jobs:
           python3 -B vps/backend/lhdn_direct_reminder_outbox_candidate.py
           python3 -B vps/backend/lhdn_connection_selection_candidate.py
           python3 -B vps/backend/lhdn_direct_reminder_job_candidate.py
+          python3 -B vps/backend/lhdn_direct_reminder_runtime_candidate.py --test
+          python3 -B vps/backend/lhdn_receipt_display_candidate.py
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
