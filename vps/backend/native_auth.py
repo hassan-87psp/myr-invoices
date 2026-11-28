@@ -24,9 +24,11 @@ def authenticate(conn, email, password):
         return None
     if not 1 <= len(email) <= 254 or not 1 <= len(password) <= 128:
         return None
+    # Hold the account row until session issuance commits. A concurrent reset
+    # must wait, then revoke the just-issued session before completing.
     row = conn.execute(
         """SELECT id, password_hash, email_verified_at, disabled
-           FROM myr_native.users WHERE email = %s""",
+           FROM myr_native.users WHERE email = %s FOR SHARE""",
         (email.strip().lower(),),
     ).fetchone()
     try:
