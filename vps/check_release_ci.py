@@ -32,6 +32,7 @@ def main():
     for p in sorted((ROOT/"vps").glob("*.sh")):
         run("bash","-n",p)
     manifest_check()
+    run(sys.executable,"-B",ROOT/"vps/backend/check_private_reliability.py","--selftest")
     run("node",ROOT/"vps/check_account_link_scope.mjs")
     run("node",ROOT/"vps/check_invoice_rounding.mjs")
     # Explicit offline-only tests. No dynamic discovery or database-dependent test execution.
