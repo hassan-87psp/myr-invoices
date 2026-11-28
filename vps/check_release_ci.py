@@ -167,6 +167,47 @@ values['myr.sidebar.v1']='broken';if(myrSideRead().width!==252)throw Error('Corr
     assert "desktop.matches" in html[html.index("function lpScrollMotion"):html.index("function lpMobileStatic")]
     print("MYR_SIDEBAR_MOTION_OK",flush=True)
 
+def company_settings_check():
+    html=(ROOT/"index.html").read_text()
+    m=json.loads((ROOT/"vps/approved-frontend-releases.json").read_text())
+    rel=next(r for r in m["releases"] if r["id"]=="company-settings-guided-v1")
+    for p in rel["replacements"]:
+        assert html.count(p["new"])==1
+    helpers=html[html.index("function myrStMsicOptions("):html.index("function vSettingsContent(){")]
+    data=html[html.index("const MYR_OB_MSIC="):html.index("function vOnboarding(){")]
+    fixture=r"""
+const els={};const $=id=>els[id]??={value:'',textContent:'',hidden:false,disabled:false,required:false,innerHTML:'',reportValidity:()=>true};
+const val=id=>$('#'+id).value.trim(),opt=list=>JSON.stringify(list),TIN_RE=/^C[0-9]{8,12}$/;
+let permitted=true,errors=[],saved=[];const can=()=>permitted;const toast=m=>errors.push(m);
+const saveSettings=async()=>saved.push({msic:val('st-msic'),desc:val('st-msicd'),sst:val('st-sst'),email:val('st-email'),ttx:val('st-ttx')});
+"""
+    tests=r"""
+(async()=>{
+$('#st-msic').value='62010';$('#st-msicd').value='Existing description';
+$('#st-email').value='billing@example.invalid';$('#st-ttx').value='TTX123';$('#st-tin').value='C1234567890';
+$('#st-sst-choice').value='yes';$('#st-sst-number').value='SST123';
+$('#myr-st-profile').querySelectorAll=()=>[];
+$('#st-msic-search').value='maize';myrStMsicSearch();
+if(val('st-msic')!=='62010'||val('st-msicd')!=='Existing description')throw Error('Search silently changed saved data');
+$('#st-msic-select').value='';myrStMsicSelect();if(val('st-msic')!=='62010')throw Error('Empty selection wiped saved activity');
+const idx=MYR_OB_MSIC.findIndex(r=>r[0]==='01111');
+$('#st-msic-select').value=String(idx);myrStMsicSelect();
+if(val('st-msic')!=='01111'||val('st-msicd')!=='Growing of maize')throw Error('MSIC change');
+const btn={disabled:false,isConnected:true};
+await myrStSave(btn);if(saved.length!==1||saved[0].sst!=='SST123'||saved[0].ttx!=='TTX123'||saved[0].email!=='billing@example.invalid')throw Error('Existing fields not preserved');
+$('#st-sst-choice').value='no';myrStSst();if(!$('#st-sst-number').disabled||!$('#st-sst-box').hidden)throw Error('SST no UI');
+await myrStSave(btn);if(saved[1].sst!=='NA')throw Error('SST no payload');
+$('#st-sst-choice').value='yes';myrStSst();if($('#st-sst-number').disabled||!$('#st-sst-number').required||val('st-sst-number')!=='SST123')throw Error('SST yes preserves input');
+$('#st-sst-number').value='';await myrStSave(btn);if(saved.length!==2||!errors.at(-1).includes('Tax registration'))throw Error('Missing SST blocked');
+permitted=false;$('#st-sst-number').value='SST123';await myrStSave(btn);if(saved.length!==2)throw Error('Role guard');
+})().catch(e=>{console.error(e);process.exitCode=1});
+"""
+    run("node","-",input=fixture+data+helpers+tests,text=True)
+    profile=html[html.index("function vSettingsContent(){"):html.index("function saveSettings(){")]
+    for marker in ("Additional details (optional)","Tax Identification Number (TIN)","Business Registration Number (BRN)","Malaysia Standard Industrial Classification (MSIC)","myrStSave(this)","st-msicd","st-sst-number","st-ttx","st-email"):
+        assert marker in profile,marker
+    print("MYR_GUIDED_SETTINGS_OK",flush=True)
+
 def main():
     for p in sorted((ROOT/"vps/backend").rglob("*.py")):
         ast.parse(p.read_text(),filename=str(p))
@@ -180,6 +221,7 @@ def main():
     sandbox_admin_check()
     onboarding_check()
     sidebar_motion_check()
+    company_settings_check()
     run(sys.executable,"-B",ROOT/"vps/check_legacy_deployment_guard.py")
     run(sys.executable,"-B",ROOT/"vps/check_validation_redaction.py")
     run(sys.executable,"-B",ROOT/"vps/check_security_regression.py")
