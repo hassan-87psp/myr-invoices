@@ -11,9 +11,33 @@ function myrCentralAdmin(d){
  return '<section class="card pad mb"><div class="row sb"><h3>'+ic('plug',18)+' Central MyInvois connection</h3><button class="btn sm" onclick="adminFetch()">Refresh status</button></div><dl class="kv mt">'+entries.map(([k,v])=>'<dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd>').join('')+'</dl><p class="muted sm mt">Configuration is not proof of customer authorization.</p></section>'+sandboxCard;
 }
 function myrCentralCustomer(){
+ const co=CO(),hasIdentity=!!(co.tin&&co.brn),canSetup=can('Manage Settings')&&!co.demo&&hasIdentity;
+ return myrAccountHeading('Integrations','Choose how your business connects to LHDN MyInvois.')+
+ '<section class="card pad mb"><div class="row sb" style="flex-wrap:wrap;gap:8px"><h3>'+ic('plug',18)+' LHDN Connection</h3><span class="badge b-warn">Setup required</span></div><p class="muted sm mt8">Choose one connection method. You only need to set it up once; authorization or credentials may need renewal later.</p>'+
+ '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px;margin-top:16px">'+
+ '<div class="card pad" style="display:flex;flex-direction:column;gap:8px"><div class="row sb"><h3>'+ic('zap',18)+' Easy Connect</h3><span class="badge b-warn">Simpler setup</span></div><strong>Central Intermediary</strong><p class="muted sm">Authorize MYR Invoice in your MyInvois portal. No customer API keys to manage.</p><p class="sm">One-time appointment · Provider identity required</p><button type="button" class="btn p" style="margin-top:auto" aria-pressed="false" data-myr-lhdn-choice="easy" '+(!canSetup?'disabled':'')+' onclick="myrLhdnSelect(this)">Choose Easy Connect</button></div>'+
+ '<div class="card pad" style="display:flex;flex-direction:column;gap:8px"><h3>'+ic('key',18)+' Direct Connect</h3><strong>Own ERP Credentials</strong><p class="muted sm">Connect using your company’s own MyInvois Client ID and Client Secret. No intermediary appointment.</p><p class="sm">One-time ERP setup · Credential renewal when required</p><button type="button" class="btn" style="margin-top:auto" aria-pressed="false" data-myr-lhdn-choice="direct" '+(!canSetup?'disabled':'')+' onclick="myrLhdnSelect(this)">Choose Direct Connect</button></div></div>'+
+ (!canSetup?'<p class="note w mt8">A company owner or authorized settings user with complete company details is required to start setup.</p>':'')+
+ '<p class="muted sm mt8">Connection verification and invoice submission are separate release stages. Selecting an option does not connect or submit anything.</p></section><div id="myr-lhdn-choice-panel" aria-live="polite"></div>';
+}
+function myrLhdnDirectContent(){
+ const co=CO();
+ return '<section class="card pad"><div class="row sb" style="flex-wrap:wrap;gap:8px"><h3>'+ic('key',18)+' Direct Connect · ERP</h3><span class="badge b-warn">Pilot preparation</span></div>'+
+ '<dl class="kv mt8"><dt>Company</dt><dd>'+esc(co.name||'—')+'</dd><dt>TIN</dt><dd>'+esc(co.tin||'—')+'</dd><dt>BRN</dt><dd>'+esc(co.brn||'—')+'</dd></dl>'+
+ '<h3 class="mt">1. Register your ERP</h3><p class="muted sm mt8">Open MyInvois using your own company profile, go to ERP registration and generate the Client ID and Client Secret. Sandbox and production credentials are different.</p><a class="btn sm mt8" href="https://preprod.myinvois.hasil.gov.my/" target="_blank" rel="noopener noreferrer">Open Sandbox Portal ↗</a>'+
+ '<h3 class="mt">2. Secure connection</h3><p class="note w mt8">Credential entry is not enabled yet. Do not send your API secrets by chat or email. The secure connection form will become available only after the server-side pilot is released.</p>'+
+ '<h3 class="mt">3. Automatic processing</h3><p class="muted sm mt8">After a verified connection, MYR Invoice will manage token renewal, document submission and status updates when those features are released. No connection has been verified and no invoice will be submitted from this screen.</p></section>';
+}
+function myrLhdnSelect(btn){
+ const co=CO(),panel=document.getElementById('myr-lhdn-choice-panel');
+ if(!co||!panel||btn.disabled||!can('Manage Settings')||co.demo||!co.tin||!co.brn)return;
+ const mode=btn.dataset.myrLhdnChoice;if(mode!=='easy'&&mode!=='direct')return;
+ for(const el of document.querySelectorAll('[data-myr-lhdn-choice]'))el.setAttribute('aria-pressed',el===btn?'true':'false');
+ panel.innerHTML=mode==='easy'?myrLhdnEasyContent():myrLhdnDirectContent();
+}
+function myrLhdnEasyContent(){
  const co=CO(),party=MYR_CENTRAL_LHDN.intermediary,ready=!!(co.tin&&co.brn);
- return myrAccountHeading('Integrations','Connect MyInvois without creating API keys.')+
- '<div class="card pad"><div class="row sb"><h3>'+ic('plug',18)+' LHDN MyInvois</h3><span class="badge b-warn">Authorization pending</span></div><div class="note mt">Production · Central intermediary · Invoice submission not released</div>'+
+ return '<div class="card pad"><div class="row sb"><h3>'+ic('plug',18)+' LHDN MyInvois</h3><span class="badge b-warn">Authorization pending</span></div><div class="note mt">Production · Central intermediary · Invoice submission not released</div>'+
  '<h3 class="mt">1. Confirm company details</h3><dl class="kv mt8"><dt>Company</dt><dd>'+esc(co.name||'—')+'</dd><dt>TIN</dt><dd>'+esc(co.tin||'—')+'</dd><dt>BRN</dt><dd>'+esc(co.brn||'—')+'</dd></dl><a class="btn sm" href="#/app/settings">Review company profile</a>'+
  '<h3 class="mt">2. Authorize MYR Invoice</h3><p class="muted sm mt8">Sign in to MyTax, select your company, open Taxpayer Profile → Representatives → Intermediary and add the registered service provider with appropriate permissions.</p>'+
  (party?'<dl class="kv mt8"><dt>Registered name</dt><dd>'+esc(party.name)+'</dd><dt>Intermediary TIN</dt><dd>'+esc(party.tin)+'</dd><dt>BRN</dt><dd>'+esc(party.brn)+'</dd></dl>':'<p class="note w mt8">Registered intermediary details not yet published. Contact support before authorizing.</p>')+
