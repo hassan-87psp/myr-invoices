@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "releases": [
+    {
+      "id": "fast-start-v1",
+      "replacements": [
+        {
+          "old": "<meta charset=\"utf-8\">",
+          "new": "<meta charset=\"utf-8\">\n\n<style id=\"myr-fast-start-style\">\n#myr-fast-start{display:none}\nhtml.myr-starting #app>.myr-seo-fallback{display:none}\nhtml.myr-starting #myr-fast-start{display:grid;place-items:center;min-height:100vh;min-height:100svh;background:#f5f7fb;color:#0b1f3a;font-family:system-ui,-apple-system,Segoe UI,sans-serif}\n#myr-fast-start .myr-start-box{display:grid;justify-items:center;gap:12px;text-align:center;padding:24px}\n#myr-fast-start .myr-start-logo{width:48px;height:48px;display:block}\n#myr-fast-start .myr-start-name{font-weight:750;font-size:23px;letter-spacing:-.5px}\n#myr-fast-start .myr-start-msg{color:#64748b;font-size:13px;margin:0}\n#myr-fast-start .myr-start-retry{display:none;color:#125be4;font-size:13px;text-decoration:underline}\nhtml.myr-start-delayed #myr-fast-start .myr-start-retry{display:inline}\n</style>\n<script id=\"myr-fast-start-init\">\n(function(){\n var root=document.documentElement;\n root.classList.add('myr-starting');\n window.setTimeout(function(){\n   var box=document.getElementById('myr-fast-start');\n   if(!box)return;\n   root.classList.add('myr-start-delayed');\n   var message=box.querySelector('.myr-start-msg');\n   if(message)message.textContent='Taking longer than expected. You can reload this page.';\n },10000);\n})();\n</script>\n"
+        },
+        {
+          "old": "<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap\" rel=\"stylesheet\">",
+          "new": "<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap\" rel=\"stylesheet\" media=\"print\" onload=\"this.media='all'\"><noscript><link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap\" rel=\"stylesheet\"></noscript>"
+        },
+        {
+          "old": "<div id=\"app\"><main class=\"myr-seo-fallback\">",
+          "new": "<div id=\"app\"><div id=\"myr-fast-start\" role=\"status\" aria-live=\"polite\"><div class=\"myr-start-box\"><img class=\"myr-start-logo\" src=\"./pwa-icon-192.png\" alt=\"\" width=\"48\" height=\"48\" decoding=\"async\"><div class=\"myr-start-name\">MYR Invoice</div><p class=\"myr-start-msg\">Opening MYR Invoice…</p><a class=\"myr-start-retry\" href=\"#\" onclick=\"location.reload();return false\">Reload page</a></div></div><main class=\"myr-seo-fallback\">"
+        },
+        {
+          "old": "$('#app').innerHTML=html;",
+          "new": "$('#app').innerHTML=html;document.documentElement.classList.remove('myr-starting','myr-start-delayed');"
+        }
+      ]
+    }
+  ]
+}
