@@ -50,7 +50,9 @@ def normalize(company,invoice_id,confirmed_total_sen,now):
     require(inv.get("docType")=="01" and not inv.get("consolidated") and not inv.get("refInvoiceId"),"Only ordinary business invoice mapping is enabled")
     require(inv.get("appStatus")=="Ready","Invoice must be ready")
     if company.get("approvalRequired") is True:
-        require(inv.get("approvalAction")=="approve" and bool(inv.get("approvalActor")) and inv.get("approvalActor")!=inv.get("createdBy"),"Independent approval required")
+        approver,creator=inv.get("approvalActor"),inv.get("createdBy")
+        require(inv.get("approvalAction")=="approve" and all(isinstance(v,str) and bool(v.strip()) for v in (approver,creator))
+            and approver.strip().casefold()!=creator.strip().casefold(),"Independent approval required")
     lhdn=inv.get("lhdn")
     require(isinstance(lhdn,dict) and lhdn.get("status")=="Not Submitted" and not lhdn.get("attempts") and not any(lhdn.get(k) for k in ("submissionUid","uuid","longId","validatedAt")),"Existing LHDN activity requires reconciliation")
     require(not inv.get("payments") and not inv.get("share"),"Paid or shared invoice requires separate workflow")
@@ -78,7 +80,7 @@ def normalize(company,invoice_id,confirmed_total_sen,now):
         normalized.append({"description":it.get("desc",""),"classification":it.get("classCode",""),
             "quantity":qty,"unit_price":price/100,"discount":discount/100,
             "tax_type":it.get("taxType"),"tax_rate":rate,"unit_code":it.get("unitCode","")})
-    require(total==ui_total==sen(confirmed_total_sen),"Confirmed total differs from stored invoice")
+    require(type(confirmed_total_sen) is int and total==ui_total==sen(confirmed_total_sen),"Confirmed total differs from stored invoice")
     currency=inv.get("currency")
     fx=inv.get("fxRate")
     require(currency!="MYR" or fx in ("",None,0,"0"),"Unexpected MYR exchange rate")
@@ -112,8 +114,14 @@ class MapperTests(unittest.TestCase):
         self.assertEqual(x["payload"]["documents"][0]["codeNumber"],"INV-001")
     def test_total_mismatch(self):
         with self.assertRaises(ValueError):preview(self.company,"INV-ID",2918,self.now)
+        with self.assertRaises(ValueError):preview(self.company,"INV-ID","2919",self.now)
+        with self.assertRaises(ValueError):preview(self.company,"INV-ID",2919.0,self.now)
     def test_approval(self):
         self.company["approvalRequired"]=True
+        with self.assertRaises(ValueError):preview(self.company,"INV-ID",2919,self.now)
+        self.inv.update(approvalAction="approve",approvalActor="staff@example.invalid")
+        with self.assertRaises(ValueError):preview(self.company,"INV-ID",2919,self.now)
+        self.inv["createdBy"]=" STAFF@example.invalid "
         with self.assertRaises(ValueError):preview(self.company,"INV-ID",2919,self.now)
         self.inv.update(approvalAction="approve",approvalActor="approver@example.invalid",createdBy="staff@example.invalid")
         preview(self.company,"INV-ID",2919,self.now)
