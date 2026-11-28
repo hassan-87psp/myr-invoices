@@ -42,12 +42,34 @@ def marker():
         b=read_private(C/"native-auth-pilot-enabled",128).strip()
         return bool(re.fullmatch(b"[0-9a-f]{40}",a) and a==b)
     except (OSError,ValueError):return False
+def selftest():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        root=Path(d)
+        assert inspect_backups(root,time.time())["status"]=="missing"
+        p=root/"native-20261128T031422839519Z.dump.gpg"
+        p.write_bytes(b"synthetic archive bytes");p.chmod(0o600)
+        c=p.with_name(p.name+".sha256")
+        c.write_text(hashlib.sha256(p.read_bytes()).hexdigest()+"  "+p.name+"\n");c.chmod(0o600)
+        assert inspect_backups(root,time.time())["status"]=="verified_checksum"
+        assert inspect_backups(root,time.time()+MAX_AGE+60)["status"]=="stale_or_future"
+        p.write_bytes(b"corrupted")
+        assert inspect_backups(root,time.time())["status"]=="checksum_mismatch"
+        p.unlink();p.symlink_to(c)
+        assert inspect_backups(root,time.time())["status"]=="unverified"
+        root.chmod(0o755)
+        assert inspect_backups(root,time.time())["status"]=="unsafe_directory"
+    print("MYR_PRIVATE_RELIABILITY_OFFLINE_OK")
 def main():
     result={"core_active":unit("myr-production-core.service"),"billing_active":unit("myr-billing-readonly.service"),
             "frontend_auto_active":unit("myr-frontend-autodeploy.timer"),"backup_timer_active":unit("myr-native-backup.timer"),
             "release_markers_match":marker(),"backup":inspect_backups(B,time.time()),
             "offsite_verified":False,"restore_verified_by_this_check":False}
     print(json.dumps(result,indent=2))
-    good=all(result[k] for k in ("core_active","billing_active","backup_timer_active","release_markers_match")) and result["backup"]["status"]=="verified_checksum"
+    good=all(result[k] for k in ("core_active","billing_active","frontend_auto_active","backup_timer_active","release_markers_match")) and result["backup"]["status"]=="verified_checksum"
     return 0 if good else 1
-if __name__=="__main__":raise SystemExit(main())
+if __name__=="__main__":
+    import sys
+    if sys.argv[1:]==["--selftest"]:selftest()
+    elif not sys.argv[1:]:raise SystemExit(main())
+    else:raise SystemExit("Usage: check_private_reliability.py [--selftest]")
