@@ -30,6 +30,23 @@
           "new": "<link rel=\"preload\" as=\"script\" href=\"./config.js\">\n<link rel=\"preload\" as=\"script\" href=\"./concurrency.js\">\n<link rel=\"manifest\" href=\"./manifest.webmanifest\">"
         }
       ]
+    },
+    {
+      "id": "account-link-scope-v1",
+      "replacements": [
+        {
+          "old": "let MYR_FINISH_TOKEN='';\nfunction myrFinishView(action){",
+          "new": "let MYR_FINISH_TOKEN='',MYR_FINISH_ACTION='';\nwindow.addEventListener('hashchange',()=>{const next=location.hash.split('?')[0];if(next!=='#/auth/'+MYR_FINISH_ACTION){MYR_FINISH_TOKEN='';MYR_FINISH_ACTION=''}});\nfunction myrFinishView(action){"
+        },
+        {
+          "old": "if(token&&/^[A-Za-z0-9_-]{43}$/.test(token)){MYR_FINISH_TOKEN=token;history.replaceState(null,'','#/auth/'+action)}",
+          "new": "if(MYR_FINISH_ACTION!==action||token!==null){MYR_FINISH_TOKEN='';MYR_FINISH_ACTION=''}\n if(token&&/^[A-Za-z0-9_-]{43}$/.test(token)){MYR_FINISH_TOKEN=token;MYR_FINISH_ACTION=action;history.replaceState(null,'','#/auth/'+action)}"
+        },
+        {
+          "old": "if(!MYR_FINISH_TOKEN)return authErr('Open the secure link from your email again.');",
+          "new": "if(!MYR_FINISH_TOKEN||MYR_FINISH_ACTION!==action)return authErr('Open the secure link from your email again.');"
+        }
+      ]
     }
   ]
 }
