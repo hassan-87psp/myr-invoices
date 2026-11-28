@@ -33,6 +33,7 @@ def main():
         run("bash","-n",p)
     manifest_check()
     run("node",ROOT/"vps/check_account_link_scope.mjs")
+    run("node",ROOT/"vps/check_invoice_rounding.mjs")
     # Explicit offline-only tests. No dynamic discovery or database-dependent test execution.
     for name in ("chip_subscription_policy_candidate.py","chip_billing_view_candidate.py","chip_revenue_report_candidate.py",
                  "lhdn_protocol_candidate.py","lhdn_ubl_candidate.py","lhdn_saved_invoice_candidate.py",
