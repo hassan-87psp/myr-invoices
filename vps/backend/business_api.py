@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 import os, stat
 from pydantic import BaseModel, Field
 from psycopg.rows import dict_row
@@ -28,6 +29,13 @@ api=FastAPI(title="MYR business API",docs_url=None,redoc_url=None,openapi_url=No
 WRITE_FLAG=Path.home()/".config/myrinvoice/production-writes-enabled"
 NATIVE_FLAG=Path.home()/".config/myrinvoice/native-auth-pilot-enabled"
 api.include_router(native.router)
+
+@api.exception_handler(RequestValidationError)
+async def redact_validation_error(request, exc):
+    # Framework validation details may contain submitted passwords, tokens,
+    # invoice/customer data or user-controlled field names. Never echo them.
+    return JSONResponse({"detail":"Invalid request data"},status_code=422,
+        headers={"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"})
 
 def db():
     with connect() as conn:
