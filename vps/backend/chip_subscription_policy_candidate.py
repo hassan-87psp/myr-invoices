@@ -16,21 +16,59 @@ def renewal_date(start,anchor):
 def next_charge(sub,today,*,gateway_approved=False,live_enabled=False):
     """Return a decision only; no charge. Do not catch up multiple missed months."""
     if type(today) is not date:raise ValueError("Invalid date")
-    if not live_enabled or not gateway_approved:return {"action":"disabled"}
+    if live_enabled is not True or gateway_approved is not True:return {"action":"disabled"}
+    if sub.get("open_payment") is True:return {"action":"reconcile_existing"}
     if sub["state"]!="active" or sub.get("cancel_at_period_end") is True:return {"action":"no_charge"}
     if sub.get("consent") is not True or sub.get("token_verified") is not True:return {"action":"manual_renewal"}
     plan=sub["plan"]; amount=CATALOG.get(plan)
     if amount is None or sub.get("consented_amount_sen")!=amount or sub.get("consented_currency")!="MYR":
         return {"action":"new_consent_required"}
-    if type(sub["period_end"]) is not date or today<sub["period_end"]:return {"action":"not_due"}
+    if type(sub.get("period_end")) is not date:raise ValueError("Invalid period end")
+    if today<sub["period_end"]:return {"action":"not_due"}
     if today>sub["period_end"]:return {"action":"manual_review_overdue"}
-    if sub.get("open_payment") is True:return {"action":"reconcile_existing"}
     return {"action":"reserve_renewal","amount_sen":amount,"currency":"MYR",
             "period_start":today,"period_end":renewal_date(today,sub["anchor_day"])}
 
+def subscription_status(sub,today):
+    """Read-only expiry/reminder decision; never changes company status or charges."""
+    if type(today) is not date:raise ValueError("Invalid date")
+    if sub is None:
+        return {"status":"no_verified_subscription","days_remaining":None,"reminder":None}
+    plan=sub.get("plan")
+    start,end,anchor=sub.get("period_start"),sub.get("period_end"),sub.get("anchor_day")
+    if plan not in CATALOG or type(start) is not date or type(end) is not date or end<=start or end!=renewal_date(start,anchor):
+        raise ValueError("Invalid subscription period")
+    remaining=(end-today).days
+    status="scheduled" if today<start else "expired" if remaining<=0 else "active"
+    if sub.get("open_payment") is True:
+        reminder="reconcile_payment"
+    elif sub.get("cancel_at_period_end") is True or today<start:
+        reminder=None
+    elif remaining in (7,3,1):
+        reminder="renewal_reminder"
+    elif remaining==0:
+        reminder="period_ended"
+    else:reminder=None
+    return {"status":status,"days_remaining":max(0,remaining),"reminder":reminder}
+
+def plan_change(sub,target,seats,today):
+    """Schedule decisions only; no prorating, silent consent, or overlapping periods."""
+    if target not in CATALOG or type(seats) is not int or seats<1 or type(today) is not date:
+        raise ValueError("Invalid plan request")
+    if seats>{"Starter":1,"Pro":3,"Business":10}[target]:
+        return {"action":"seat_limit_exceeded"}
+    if sub and sub.get("open_payment") is True:
+        return {"action":"reconcile_existing"}
+    status=subscription_status(sub,today)
+    if status["status"]=="scheduled":return {"action":"review_scheduled_period"}
+    if status["status"]=="active":
+        if sub["plan"]==target:return {"action":"no_change"}
+        return {"action":"schedule_at_period_end","effective_date":sub["period_end"],"new_consent_required":True}
+    return {"action":"new_checkout_required","effective_date":today,"new_consent_required":True}
+
 def paid_period(intent,verified,*,live_enabled=False):
     """Only trusted server verification may enter this decision function."""
-    if not live_enabled:raise ValueError("Live activation disabled")
+    if live_enabled is not True:raise ValueError("Live activation disabled")
     if intent.get("mode")!="live" or verified.get("is_test") is not False:raise ValueError("Test payment rejected")
     if intent.get("provider_id")!=verified.get("provider_id") or not isinstance(intent.get("provider_id"),UUID):
         raise ValueError("Purchase identity mismatch")
@@ -76,4 +114,18 @@ if __name__=="__main__":
     try:paid_period(i,v)
     except ValueError:pass
     else:raise AssertionError("Live gate bypass")
+    assert next_charge({**sub,"open_payment":True},date(2026,3,1),gateway_approved=True,live_enabled=True)["action"]=="reconcile_existing"
+    assert next_charge(sub,b,gateway_approved=1,live_enabled=True)["action"]=="disabled"
+    period={**sub,"period_start":a}
+    assert subscription_status(None,a)["status"]=="no_verified_subscription"
+    assert subscription_status(period,date(2026,2,21))["reminder"]=="renewal_reminder"
+    assert subscription_status(period,b)["status"]=="expired"
+    assert subscription_status(period,b)["reminder"]=="period_ended"
+    assert subscription_status({**period,"cancel_at_period_end":True},b)["reminder"] is None
+    assert subscription_status({**period,"open_payment":True},b)["reminder"]=="reconcile_payment"
+    assert plan_change(period,"Starter",2,a)["action"]=="seat_limit_exceeded"
+    assert plan_change(period,"Business",2,a)["effective_date"]==b
+    assert plan_change(period,"Pro",2,a)["action"]=="no_change"
+    assert plan_change(period,"Pro",2,b)["action"]=="new_checkout_required"
+    assert plan_change({**period,"open_payment":True},"Pro",2,b)["action"]=="reconcile_existing"
     print("MYR_SUBSCRIPTION_POLICY_OFFLINE_OK")
