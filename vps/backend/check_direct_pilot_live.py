@@ -10,16 +10,17 @@ def classify(status):
 def probe(public):
     args=["-sS","-o","/dev/null","-w","%{http_code}","-X","POST","-H","Origin: https://myrinvoice.com","-H","Content-Type: application/json","--data","{}"]
     try:
-        raw=frontend.curl("/api/myr/lhdn/direct-pilot",*args) if public else frontend.output("curl","--noproxy","*","--max-time","5",*args,"http://127.0.0.1:8767/lhdn/direct-pilot")
+        raw=frontend.curl("/api/myr/lhdn/direct-pilot",*args) if public else frontend.output("curl","--noproxy","*","--max-time","5",*args,"http://127.0.0.1:8769/lhdn/direct-pilot")
         code=int(raw)
         return {"http_status":code,"status":classify(code)}
     except (OSError,ValueError,subprocess.SubprocessError):return {"http_status":None,"status":"unreachable"}
 
 def main():
     loop=probe(False);public=probe(True)
-    print(json.dumps({"backend":loop,"public_proxy":public,
-        "route_guard_verified":loop["http_status"]==401 and public["http_status"]==401,
+    service=frontend.active("myr-direct-erp-guard.service")
+    print(json.dumps({"backend":loop,"public_proxy":public,"guard_service_active":service,
+        "route_guard_verified":service and loop["http_status"]==401 and public["http_status"]==401,
         "credential_entry_approved":False,"issuer_identity_verified":False,
         "submission_verified":False,
-        "note":"Unauthenticated guard test only. Does not establish vault, owner approval or provider readiness."},indent=2))
+        "note":"Separate guard-only sidecar on loopback 8769. Does not establish vault, owner approval or provider readiness."},indent=2))
 if __name__=="__main__":main()

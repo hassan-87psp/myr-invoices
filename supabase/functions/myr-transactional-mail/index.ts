@@ -14,6 +14,7 @@ const businessEvents:Record<string,string[]>={
  overdue:["company","reference","due_date"],
  team_invitation:["company","role"],
  subscription_expiry:["company","plan","renewal_date"],
+ direct_erp_expiry:["expiry_date","reminder_stage"],
  lhdn_status:["company","reference","status"]
 };
 const templates = {
@@ -79,6 +80,7 @@ Deno.serve(async req=>{
     html=render(key,"",true);
   }else if(typeof event==="string"&&Object.hasOwn(businessEvents,event)){
     if(Deno.env.get("MYR_BUSINESS_MAIL_ENABLED")!=="true")return reply(503,{accepted:false,code:"BUSINESS_MAIL_NOT_RELEASED"});
+    if(event==="direct_erp_expiry"&&Deno.env.get("MYR_DIRECT_EXPIRY_SANDBOX_MAIL_ENABLED")!=="true")return reply(503,{accepted:false,code:"DIRECT_EXPIRY_MAIL_NOT_RELEASED"});
     if(Object.keys(data).length!==3||!validRecipient(data.recipient)||!data.details||typeof data.details!=="object"||Array.isArray(data.details))return reply(422,{accepted:false});
     const allowed=businessEvents[event],details:Record<string,string>={};
     for(const [k,v] of Object.entries(data.details)){
@@ -86,12 +88,16 @@ Deno.serve(async req=>{
       details[k]=v;
     }
     if(!allowed.every(k=>Object.hasOwn(details,k)))return reply(422,{accepted:false});
+    if(event==="direct_erp_expiry"){
+      const date=details.expiry_date;
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date||!["30-day window","7-day window","1-day window","Expired"].includes(details.reminder_stage))return reply(422,{accepted:false});
+    }
     // Capability tokens are not printed as details and only allow our own invoice portal.
     let link="";
     if(Object.hasOwn(details,"link_token")){
       if(!/^[A-Za-z0-9_-]{43}$/.test(details.link_token))return reply(422,{accepted:false});
       link=origin+"/#/v/"+details.link_token;delete details.link_token;
-    }else if(["team_invitation","subscription_expiry","lhdn_status"].includes(event))link=origin;
+    }else if(["team_invitation","subscription_expiry","lhdn_status","direct_erp_expiry"].includes(event))link=origin;
     to=data.recipient;subject=catalog[event].subject;html=render(event,link,false,details);
     text=catalog[event].body+"\n\n"+Object.entries(details).map(([k,v])=>k.replaceAll("_"," ")+": "+v).join("\n")+(link?"\n\n"+link:"");
   }else if(event==="welcome"){
