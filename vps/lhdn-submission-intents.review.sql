@@ -1,6 +1,12 @@
 -- REVIEW ONLY. Do not execute on production. No worker or API is enabled.
 -- Native VPS PostgreSQL, not Supabase. First rehearse on an isolated database.
 BEGIN;
+DO $ BEGIN
+ IF inet_server_addr() IS NOT NULL OR (current_database(),current_user) NOT IN
+   (('myr_lhdn_rehearsal','myr_lhdn_test'),('myr_lhdn_sandbox','myr_lhdn_sandbox_admin')) THEN
+   RAISE EXCEPTION 'Isolated rehearsal database required';
+ END IF;
+END $;
 CREATE TABLE myr_native.lhdn_submission_intents (
   company_id uuid NOT NULL REFERENCES myr_native.companies(id) ON DELETE RESTRICT,
   invoice_id text NOT NULL CHECK(length(invoice_id) BETWEEN 1 AND 128),
