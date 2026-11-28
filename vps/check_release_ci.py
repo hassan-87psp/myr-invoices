@@ -254,6 +254,10 @@ def dual_lhdn_check():
     t=ast.parse((ROOT/"vps/backend/build_lhdn_candidate.py").read_text())
     js=next(ast.literal_eval(n.value) for n in t.body if isinstance(n,ast.Assign)
         and any(isinstance(x,ast.Name) and x.id=="JS" for x in n.targets))
+    successor=next(r for r in m["releases"] if r["id"]=="direct-erp-pilot-ui-v1")["replacements"][0]
+    current=js
+    assert current.count(successor["new"])==1
+    js=current.replace(successor["new"],successor["old"],1)
     assert js.count(patch["new"])==1 and patch["old"] not in js
     fixture=r"""
 const co={id:'synthetic-tenant',name:'Synthetic Company',tin:'C1234567890',brn:'202001234567',demo:false};
@@ -278,6 +282,49 @@ if(!panel.innerHTML.includes('PRIVATE_PROVIDER_TIN'))throw Error('Permission gua
     run("node","-",input=fixture+js+tests,text=True)
     print("MYR_DUAL_LHDN_UI_OK",flush=True)
 
+def direct_pilot_ui_check():
+    t=ast.parse((ROOT/"vps/backend/build_lhdn_candidate.py").read_text())
+    js=next(ast.literal_eval(n.value) for n in t.body if isinstance(n,ast.Assign)
+        and any(isinstance(x,ast.Name) and x.id=="JS" for x in n.targets))
+    fixture=r"""
+const co={id:'synthetic',_v:3,name:'Synthetic company',tin:'C1234567890',brn:'202001234567',demo:false};
+const CO=()=>co,ic=()=>'',esc=String,can=()=>true,myrAccountHeading=()=> '';
+const el={isConnected:true,innerHTML:'',textContent:''};
+const document={getElementById:id=>el};
+let calls=[],reply={available:false};
+const SB={auth:{getSession:async()=>({data:{session:{native:true}}})}};
+const fetch=async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>reply};};
+"""
+    tests=r"""
+(async()=>{
+myrDirectView(el,{available:false});
+if(el.innerHTML.includes('client_secret')||!el.innerHTML.includes('unavailable'))throw Error('Closed gate');
+reply={available:true,environment:'sandbox',mode:'direct_erp',status:'not_configured',revision:0,issuer_binding_verified:false,submission_enabled:false};
+await myrDirectRequest('status',{},el,co);
+if(calls.length!==1||calls[0].url!=='/api/myr/lhdn/direct-pilot'||JSON.parse(calls[0].options.body).p_version!==3)throw Error('Status scope');
+if(!el.innerHTML.includes('name="client_secret"')||!el.innerHTML.includes('type="password"')||!el.innerHTML.includes('Save &amp; verify'))throw Error('Missing approved form');
+myrDirectView(el,{...reply,revision:3,status:'pending_identity_review',last_login_status:'login_verified',tin_brn_lookup_verified:true,expiry:'2027-11-28'});
+if(!el.innerHTML.includes('Login verified')||!el.innerHTML.includes('Pending independent verification')||!el.innerHTML.includes('Disconnect'))throw Error('Safe pending state');
+myrDirectView(el,{...reply,issuer_binding_verified:true});
+if(el.innerHTML.includes('client_secret'))throw Error('Unexpected enabled response');
+const extra={revision:0,client_id:'synthetic-id',client_secret:'synthetic-secret',expiry:'2027-11-28',consent:true};
+await myrDirectRequest('save',extra,el,co);
+if('client_secret' in extra||'client_id' in extra||el.innerHTML.includes('synthetic-secret'))throw Error('Secret retention');
+if(calls[1].options.credentials!=='same-origin'||calls[1].options.cache!=='no-store')throw Error('Request flags');
+el.isConnected=false;await myrDirectRequest('status',{},el,co);
+if(calls.length!==2)throw Error('Detached panel must not request');
+})().catch(e=>{console.error(e);process.exitCode=1});
+"""
+    run("node","-",input=fixture+js+tests,text=True)
+    # Static guard checks on actual server adapter. No server/DB imported here.
+    src=(ROOT/"vps/backend/business_api.py").read_text()
+    route=src[src.index("def direct_pilot_operation("):src.index("class AdminCompanyBody")]
+    for marker in ('native_enabled()','owner_company(conn,profile,cid,lock=True)','u.disabled=false',
+                   "c.data->>'demo' IS DISTINCT FROM 'true'",'len(raw)+len(part)>4096',
+                   'object_pairs_hook=_unique_object','Origin rejected','JSON request required','from None'):
+        assert marker in route,marker
+    print("MYR_DIRECT_PILOT_UI_AND_ROUTE_GUARDS_OK",flush=True)
+
 def main():
     for p in sorted((ROOT/"vps/backend").rglob("*.py")):
         ast.parse(p.read_text(),filename=str(p))
@@ -294,6 +341,7 @@ def main():
     company_settings_check()
     premium_settings_check()
     dual_lhdn_check()
+    direct_pilot_ui_check()
     run(sys.executable,"-B",ROOT/"vps/check_legacy_deployment_guard.py")
     run(sys.executable,"-B",ROOT/"vps/check_validation_redaction.py")
     run(sys.executable,"-B",ROOT/"vps/check_security_regression.py")
