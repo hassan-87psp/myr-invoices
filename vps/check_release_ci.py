@@ -22,6 +22,58 @@ def manifest_check():
             assert p["old"]!=p["new"] and len(p["old"])<=100000 and len(p["new"])<=150000
     print("MYR_APPROVED_MANIFEST_VALID",flush=True)
 
+def sandbox_admin_check():
+    # Extract the real route body without importing the production DB/auth stack.
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    tree=ast.parse((ROOT/"vps/backend/business_api.py").read_text())
+    route=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=="admin_dashboard")
+    route.decorator_list=[]
+    route.args.defaults=[]
+    for arg in route.args.args:
+        arg.annotation=None
+    conn=Mock()
+    auth=Mock(side_effect=PermissionError("admin required"))
+    dashboard=Mock(return_value={})
+    production=Mock(return_value={"environment":"production","submission_enabled":False})
+    sandbox=Mock(return_value={"environment":"sandbox","credentials_configured":True,
+                               "connection_check_enabled":True,"submission_enabled":False})
+    scope=dict(admin_identity=auth,dashboard=dashboard,
+               central_lhdn=SimpleNamespace(configuration_status=production,
+                                             sandbox_configuration_status=sandbox))
+    exec(compile(ast.Module(body=[route],type_ignores=[]),"<isolated-route>","exec"),scope)
+    try:
+        scope["admin_dashboard"](object(),conn)
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("Non-admin route should fail")
+    production.assert_not_called()
+    sandbox.assert_not_called()
+    dashboard.assert_not_called()
+    auth.side_effect=None
+    auth.return_value={"is_platform_admin":True}
+    result=scope["admin_dashboard"](object(),conn)["central_lhdn"]
+    assert result["environment"]=="production" and result["submission_enabled"] is False
+    assert result["sandbox"]["environment"]=="sandbox" and result["sandbox"]["submission_enabled"] is False
+    production.assert_called_once_with()
+    sandbox.assert_called_once_with()
+    # Execute the actual private frontend JS in Node with safe presentation stubs.
+    t=ast.parse((ROOT/"vps/backend/build_lhdn_candidate.py").read_text())
+    js=next(ast.literal_eval(n.value) for n in t.body if isinstance(n,ast.Assign)
+            and any(isinstance(x,ast.Name) and x.id=="JS" for x in n.targets))
+    run("node","--check","-",input=js,text=True)
+    run("node","-",input="const ic=()=>''; const esc=String;\n"+js+r"""
+const absent=myrCentralAdmin({});
+const ready=myrCentralAdmin({central_lhdn:{bridge_reachable:true,connection_check_enabled:false,
+ sandbox:{bridge_reachable:true,credentials_configured:true,connection_check_enabled:true}}});
+if(!absent.includes('Sandbox testing readiness') || !absent.includes('Unknown')) throw Error('Missing safe fallback');
+if(!ready.includes('Not verified by configuration check') || !ready.includes('Invoice submission') ||
+ !ready.includes('No documents will be submitted.') || !ready.includes('<dd>Configured</dd>') ||
+ !ready.includes('<dd>Enabled</dd>') || !ready.includes('<dd>Disabled</dd>')) throw Error('Readiness rendering incorrect');
+""",text=True)
+    print("MYR_SANDBOX_ADMIN_READINESS_OK",flush=True)
+
 def main():
     for p in sorted((ROOT/"vps/backend").rglob("*.py")):
         ast.parse(p.read_text(),filename=str(p))
@@ -32,6 +84,7 @@ def main():
     for p in sorted((ROOT/"vps").glob("*.sh")):
         run("bash","-n",p)
     manifest_check()
+    sandbox_admin_check()
     run(sys.executable,"-B",ROOT/"vps/check_legacy_deployment_guard.py")
     run(sys.executable,"-B",ROOT/"vps/check_validation_redaction.py")
     run(sys.executable,"-B",ROOT/"vps/check_security_regression.py")
