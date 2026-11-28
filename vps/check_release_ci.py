@@ -121,6 +121,52 @@ if(val('ob-msic')||val('ob-msicd'))throw Error('Stale MSIC');
         assert marker in html,marker
     print("MYR_GUIDED_ONBOARDING_OK",flush=True)
 
+def sidebar_motion_check():
+    html=(ROOT/"index.html").read_text()
+    m=json.loads((ROOT/"vps/approved-frontend-releases.json").read_text())
+    rel=next(r for r in m["releases"] if r["id"]=="workspace-sidebar-motion-v1")
+    for p in rel["replacements"]:
+        assert html.count(p["new"])==1
+    js=html[html.index("function myrSideClamp("):html.index("function paint(html)")]
+    fixture=r"""
+const values={};let desktop=true;let innerWidth=1440;
+const matchMedia=()=>({matches:desktop});
+const localStorage={getItem:k=>values[k],setItem:(k,v)=>values[k]=v};
+function element(){
+ const attrs={},handlers={},children=[],classes=new Set(),props={};
+ return {attrs,handlers,children,classes,props,classList:{add:k=>classes.add(k),toggle:(k,v)=>v?classes.add(k):classes.delete(k),remove:k=>classes.delete(k)},
+ style:{setProperty:(k,v)=>props[k]=v},setAttribute:(k,v)=>attrs[k]=v,
+ append:e=>children.push(e),prepend:e=>children.unshift(e),querySelectorAll:()=>[],querySelector:()=>null,
+ addEventListener:(k,f)=>handlers[k]=f,setPointerCapture:()=>{},getBoundingClientRect:()=>({width:desktop?Number(root.props['--myr-side-width'].replace('px','')):Number(root.props['--myr-drawer-width'].replace('px',''))})}
+}
+const root=element(),side=element(),top=element();root.querySelector=s=>s==='#side'?side:top;
+const document={querySelector:()=>root,createElement:()=>element()};
+"""
+    tests=r"""
+if(myrSideClamp(999,190,380)!==380||myrSideClamp(-5,190,380)!==190)throw Error('Width limits');
+myrSideSetup();
+const toggle=top.children[0],close=side.children[0],grip=side.children[1];
+if(root.props['--myr-side-width']!=='252px'||toggle.attrs['aria-expanded']!=='true')throw Error('Default width');
+toggle.onclick();if(!root.classes.has('myr-side-mini')||toggle.attrs['aria-expanded']!=='false'||!myrSideRead().mini)throw Error('Collapse persistence');
+toggle.onclick();if(root.classes.has('myr-side-mini'))throw Error('Expand');
+grip.handlers.pointerdown({button:0,pointerId:1,clientX:252,preventDefault(){}});
+grip.handlers.pointermove({pointerId:1,clientX:350});grip.handlers.pointerup({pointerId:1});
+if(myrSideRead().width!==350||root.props['--myr-side-width']!=='350px')throw Error('Pointer resize');
+grip.handlers.keydown({key:'Home',preventDefault(){}});if(myrSideRead().width!==190)throw Error('Keyboard resize');
+desktop=false;innerWidth=375;
+grip.handlers.keydown({key:'End',preventDefault(){}});if(myrSideRead().drawer!==330||myrSideRead().width!==190)throw Error('Mobile bounds and independent width');
+side.classes.add('open');close.onclick();if(side.classes.has('open'))throw Error('Drawer close');
+values['myr.sidebar.v1']='broken';if(myrSideRead().width!==252)throw Error('Corrupt preferences');
+"""
+    run("node","-",input=fixture+js+tests,text=True)
+    motion=html[html.index("function lpMotion(){"):html.index("function lpPhonePreview(){")]
+    assert "lpMobileStatic(root,phone);return" not in motion
+    assert "paused=media.matches" in motion
+    assert ".ux-ref .ux-motion-toggle{display:none!important}" in html
+    assert "myr-mobile-reveal" in html and "prefers-reduced-motion:no-preference" in html
+    assert "desktop.matches" in html[html.index("function lpScrollMotion"):html.index("function lpMobileStatic")]
+    print("MYR_SIDEBAR_MOTION_OK",flush=True)
+
 def main():
     for p in sorted((ROOT/"vps/backend").rglob("*.py")):
         ast.parse(p.read_text(),filename=str(p))
@@ -133,6 +179,7 @@ def main():
     manifest_check()
     sandbox_admin_check()
     onboarding_check()
+    sidebar_motion_check()
     run(sys.executable,"-B",ROOT/"vps/check_legacy_deployment_guard.py")
     run(sys.executable,"-B",ROOT/"vps/check_validation_redaction.py")
     run(sys.executable,"-B",ROOT/"vps/check_security_regression.py")
